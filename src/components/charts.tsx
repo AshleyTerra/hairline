@@ -307,7 +307,7 @@ export function RankedBars({
 export function MixBars({
   data,
 }: {
-  data: { year: number; service: number; retail: number; retailShare: number }[];
+  data: { year: number; service: number; retail: number; retailShare: number; partial: boolean }[];
 }) {
   const max = Math.max(...data.map((d) => d.service + d.retail), 1);
 
@@ -337,7 +337,10 @@ export function MixBars({
           return (
             <li key={d.year}>
               <div className="mb-1 flex items-baseline justify-between gap-3 text-xs">
-                <span className="tnum font-semibold text-ink">{d.year}</span>
+                <span className="tnum font-semibold text-ink">
+                  {d.year}
+                  {d.partial && <span className="ml-1 font-normal text-mutedink">part year</span>}
+                </span>
                 <span className="text-mutedink">
                   {zarCompact(total)} · retail {d.retailShare}%
                 </span>

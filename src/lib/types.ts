@@ -141,7 +141,13 @@ export interface Analytics {
   dailyRevenue90: { date: string; invoices: number; revenue: number }[];
   topServices: { name: string; times: number; revenue: number }[];
   topProducts: { name: string; times: number; revenue: number }[];
-  mixByYear: { year: number; service: number; retail: number; retailShare: number }[];
+  mixByYear: {
+    year: number;
+    service: number;
+    retail: number;
+    retailShare: number;
+    partial: boolean;
+  }[];
   paymentMix: {
     cash: number;
     card: number;

@@ -1,4 +1,4 @@
-# Extracts real data from the restored MySalon LocalDB into raw JSON.
+﻿# Extracts real data from the restored MySalon LocalDB into raw JSON.
 # Output contains real client PII and is written to the scratchpad only - never committed.
 
 param(
@@ -38,9 +38,11 @@ function Export-Json {
   Write-Host ("{0,-24} {1,7} rows" -f $Name, $table.Rows.Count)
 }
 
-# Reference date = latest invoice in the data
+# Reference date = the last REAL trading day. A single stray invoice dated weeks
+# after the backup would otherwise anchor every window to an empty period.
 Export-Json "meta" @"
-SELECT CONVERT(varchar(10), MAX([Date]), 120) AS maxInvoiceDate,
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
+SELECT TOP 1 CONVERT(varchar(10), @maxd, 120) AS maxInvoiceDate,
        (SELECT COUNT(*) FROM Invoices) AS totalInvoices,
        (SELECT COUNT(*) FROM Clients WHERE Active=1) AS activeClients,
        (SELECT CompanyName FROM CompanyInfo) AS companyName
@@ -70,6 +72,7 @@ WHERE s.ServiceType IN ('R','Stock Item')
 "@
 
 Export-Json "clients" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT TOP 750 c.ClientID AS id, c.FirstName AS fn, c.Surname AS sn, c.Tel1 AS tel,
        c.Email AS email, CONVERT(varchar(10), c.BirthDate, 120) AS bday,
        CONVERT(varchar(10), c.FirstVisit, 120) AS firstVisit,
@@ -80,12 +83,13 @@ SELECT TOP 750 c.ClientID AS id, c.FirstName AS fn, c.Surname AS sn, c.Tel1 AS t
 FROM Clients c
 JOIN (SELECT ClientID, MAX([Date]) AS lastVisit, COUNT(*) AS visitCount,
              SUM(Total) AS lifetimeSpend
-      FROM Invoices GROUP BY ClientID) x ON x.ClientID = c.ClientID
+      FROM Invoices WHERE [Date] < @maxd GROUP BY ClientID) x ON x.ClientID = c.ClientID
 WHERE c.Active = 1
 ORDER BY x.lastVisit DESC
 "@
 
 Export-Json "invoices13m" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT i.InvoiceID AS id, i.ClientID AS clientId,
        CONVERT(varchar(19), i.[Date], 120) AS date, i.Total AS total,
        ISNULL(i.PaidCash,0) AS cash, ISNULL(i.PaidCard,0) AS card,
@@ -95,7 +99,7 @@ SELECT i.InvoiceID AS id, i.ClientID AS clientId,
        ISNULL(ii.Disc,0) AS disc, ii.StylistID AS stylistId, ii.ServiceType AS kind
 FROM Invoices i
 JOIN InvoiceItems ii ON ii.InvoiceID = i.InvoiceID
-WHERE i.[Date] >= DATEADD(month, -13, (SELECT MAX([Date]) FROM Invoices))
+WHERE i.[Date] >= DATEADD(month, -13, @maxd)
   AND i.ClientID IN (
     SELECT TOP 750 c.ClientID FROM Clients c
     JOIN (SELECT ClientID, MAX([Date]) lv FROM Invoices GROUP BY ClientID) x
@@ -110,74 +114,84 @@ FROM Invoices GROUP BY YEAR([Date])
 "@
 
 Export-Json "revenueByMonth" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT CONVERT(varchar(7), [Date], 120) AS ym, COUNT(*) AS invoices,
        CAST(SUM(Total) AS decimal(14,2)) AS revenue
 FROM Invoices
-WHERE [Date] >= DATEADD(month, -24, (SELECT MAX([Date]) FROM Invoices))
+WHERE [Date] >= DATEADD(month, -24, @maxd)
 GROUP BY CONVERT(varchar(7), [Date], 120)
 "@
 
 Export-Json "topServices" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT TOP 12 ii.Description AS name, COUNT(*) AS times,
        CAST(SUM(ii.Price * ISNULL(ii.Qty,1)) AS decimal(14,2)) AS revenue
 FROM InvoiceItems ii JOIN Invoices i ON i.InvoiceID = ii.InvoiceID
-WHERE i.[Date] >= DATEADD(month, -12, (SELECT MAX([Date]) FROM Invoices))
+WHERE i.[Date] >= DATEADD(month, -12, @maxd)
   AND ii.ServiceType = 'S'
 GROUP BY ii.Description ORDER BY SUM(ii.Price * ISNULL(ii.Qty,1)) DESC
 "@
 
 Export-Json "topProducts" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT TOP 12 ii.Description AS name, COUNT(*) AS times,
        CAST(SUM(ii.Price * ISNULL(ii.Qty,1)) AS decimal(14,2)) AS revenue
 FROM InvoiceItems ii JOIN Invoices i ON i.InvoiceID = ii.InvoiceID
-WHERE i.[Date] >= DATEADD(month, -12, (SELECT MAX([Date]) FROM Invoices))
+WHERE i.[Date] >= DATEADD(month, -12, @maxd)
   AND ii.ServiceType = 'R'
 GROUP BY ii.Description ORDER BY SUM(ii.Price * ISNULL(ii.Qty,1)) DESC
 "@
 
 Export-Json "stylistPerf" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT ii.StylistID AS stylistId,
        CAST(SUM(CASE WHEN ii.ServiceType='S' THEN ii.Price * ISNULL(ii.Qty,1) ELSE 0 END) AS decimal(14,2)) AS serviceRevenue,
        CAST(SUM(CASE WHEN ii.ServiceType='R' THEN ii.Price * ISNULL(ii.Qty,1) ELSE 0 END) AS decimal(14,2)) AS retailRevenue,
        COUNT(DISTINCT ii.InvoiceID) AS invoices
 FROM InvoiceItems ii JOIN Invoices i ON i.InvoiceID = ii.InvoiceID
-WHERE i.[Date] >= DATEADD(month, -12, (SELECT MAX([Date]) FROM Invoices))
+WHERE i.[Date] >= DATEADD(month, -12, @maxd)
   AND ii.StylistID IN (SELECT StylistID FROM Stylists WHERE Active=1)
 GROUP BY ii.StylistID
 "@
 
 Export-Json "stylistMonthly" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT ii.StylistID AS stylistId, CONVERT(varchar(7), i.[Date], 120) AS ym,
        CAST(SUM(ii.Price * ISNULL(ii.Qty,1)) AS decimal(14,2)) AS revenue
 FROM InvoiceItems ii JOIN Invoices i ON i.InvoiceID = ii.InvoiceID
-WHERE i.[Date] >= DATEADD(month, -12, (SELECT MAX([Date]) FROM Invoices))
+WHERE i.[Date] >= DATEADD(month, -12, @maxd)
   AND ii.StylistID IN (SELECT StylistID FROM Stylists WHERE Active=1)
 GROUP BY ii.StylistID, CONVERT(varchar(7), i.[Date], 120)
 "@
 
+# Busiest trading day in the final fortnight, so "today" in the demo sits close
+# to the end of the data and client visit dates stay in the past.
 Export-Json "demoDay" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT TOP 1 CONVERT(varchar(10), [Date], 120) AS d, COUNT(*) AS n,
        CAST(SUM(Total) AS decimal(14,2)) AS t
 FROM Invoices
-WHERE [Date] < CAST((SELECT MAX([Date]) FROM Invoices) AS date)
-  AND [Date] >= DATEADD(day, -60, (SELECT MAX([Date]) FROM Invoices))
+WHERE [Date] < CAST(@maxd AS date)
+  AND [Date] >= DATEADD(day, -14, @maxd)
 GROUP BY CONVERT(varchar(10), [Date], 120), CAST([Date] AS date)
 ORDER BY SUM(Total) DESC
 "@
 
 Export-Json "tips12m" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT t.StylistID AS stylistId, CAST(SUM(t.TipAmount) AS decimal(14,2)) AS total,
        COUNT(*) AS times
 FROM StylistTips t JOIN Invoices i ON i.InvoiceID = t.InvoiceID
-WHERE i.[Date] >= DATEADD(month, -12, (SELECT MAX([Date]) FROM Invoices))
+WHERE i.[Date] >= DATEADD(month, -12, @maxd)
 GROUP BY t.StylistID
 "@
 
 Export-Json "subs12m" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT StylistID AS stylistId, CONVERT(varchar(10), StaffSubDate, 120) AS date,
        Amount AS amount, Description AS descr
 FROM StaffSubs
-WHERE StaffSubDate >= DATEADD(month, -12, (SELECT MAX([Date]) FROM Invoices))
+WHERE StaffSubDate >= DATEADD(month, -12, @maxd)
 "@
 
 Export-Json "cashupRecent" @"
@@ -210,10 +224,11 @@ FROM StaffSubs GROUP BY StylistID
 "@
 
 Export-Json "dailyRevenue90" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT CONVERT(varchar(10), [Date], 120) AS d, COUNT(*) AS invoices,
        CAST(SUM(Total) AS decimal(14,2)) AS revenue
 FROM Invoices
-WHERE [Date] >= DATEADD(day, -90, (SELECT MAX([Date]) FROM Invoices))
+WHERE [Date] >= DATEADD(day, -90, @maxd)
 GROUP BY CONVERT(varchar(10), [Date], 120)
 "@
 
@@ -227,16 +242,18 @@ GROUP BY YEAR(i.[Date])
 "@
 
 Export-Json "paymentMix12m" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT CAST(SUM(ISNULL(PaidCash,0)) AS decimal(14,2)) AS cash,
        CAST(SUM(ISNULL(PaidCard,0)) AS decimal(14,2)) AS card,
        CAST(SUM(ISNULL(PaidEFT,0)) AS decimal(14,2)) AS eft,
        CAST(SUM(ISNULL(PaidToPay,0)) AS decimal(14,2)) AS toPay,
        CAST(SUM(ISNULL(PaidVoucher,0)) AS decimal(14,2)) AS voucher
 FROM Invoices
-WHERE [Date] >= DATEADD(month, -12, (SELECT MAX([Date]) FROM Invoices))
+WHERE [Date] >= DATEADD(month, -12, @maxd)
 "@
 
 Export-Json "demoDayInvoices" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT i.InvoiceID AS id, i.ClientID AS clientId,
        CONVERT(varchar(19), i.[Date], 120) AS date, i.Total AS total,
        ISNULL(i.PaidCash,0) AS cash, ISNULL(i.PaidCard,0) AS card,
@@ -247,12 +264,13 @@ SELECT i.InvoiceID AS id, i.ClientID AS clientId,
 FROM Invoices i JOIN InvoiceItems ii ON ii.InvoiceID = i.InvoiceID
 WHERE CAST(i.[Date] AS date) = (
   SELECT TOP 1 CAST([Date] AS date) FROM Invoices
-  WHERE [Date] < CAST((SELECT MAX([Date]) FROM Invoices) AS date)
-    AND [Date] >= DATEADD(day, -60, (SELECT MAX([Date]) FROM Invoices))
+  WHERE [Date] < CAST(@maxd AS date)
+    AND [Date] >= DATEADD(day, -14, @maxd)
   GROUP BY CAST([Date] AS date) ORDER BY SUM(Total) DESC)
 "@
 
 Export-Json "demoDayClients" @"
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT DISTINCT c.ClientID AS id, c.FirstName AS fn, c.Surname AS sn, c.Tel1 AS tel,
        c.StylistID AS prefStylist,
        CONVERT(varchar(10), c.FirstVisit, 120) AS firstVisit
@@ -260,8 +278,8 @@ FROM Clients c WHERE c.ClientID IN (
   SELECT i.ClientID FROM Invoices i
   WHERE CAST(i.[Date] AS date) = (
     SELECT TOP 1 CAST([Date] AS date) FROM Invoices
-    WHERE [Date] < CAST((SELECT MAX([Date]) FROM Invoices) AS date)
-      AND [Date] >= DATEADD(day, -60, (SELECT MAX([Date]) FROM Invoices))
+    WHERE [Date] < CAST(@maxd AS date)
+      AND [Date] >= DATEADD(day, -14, @maxd)
     GROUP BY CAST([Date] AS date) ORDER BY SUM(Total) DESC))
 "@
 
@@ -283,14 +301,14 @@ FROM Clients WHERE Active = 1
 "@
 
 Export-Json "retention" @"
-DECLARE @maxd datetime = (SELECT MAX([Date]) FROM Invoices);
+DECLARE @maxd datetime = (SELECT DATEADD(day,1,MAX(d)) FROM (SELECT CAST([Date] AS date) d, COUNT(*) n FROM Invoices GROUP BY CAST([Date] AS date)) t WHERE n >= 5);
 SELECT
   SUM(CASE WHEN lv >= DATEADD(day,-90,@maxd) THEN 1 ELSE 0 END) AS active90,
   SUM(CASE WHEN lv < DATEADD(day,-90,@maxd) AND lv >= DATEADD(day,-365,@maxd) THEN 1 ELSE 0 END) AS lapsed,
   SUM(CASE WHEN visits = 1 THEN 1 ELSE 0 END) AS oneTimers,
   SUM(CASE WHEN visits >= 10 THEN 1 ELSE 0 END) AS loyal10plus
 FROM (SELECT ClientID, MAX([Date]) AS lv, COUNT(*) AS visits
-      FROM Invoices GROUP BY ClientID) t
+      FROM Invoices WHERE [Date] < @maxd GROUP BY ClientID) t
 "@
 
 $conn.Close()

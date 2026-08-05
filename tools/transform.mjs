@@ -275,10 +275,16 @@ const DEPT_LABEL = {
   "Welle straight": "Wella Straightening",
 };
 
+/** Capitalises names typed in lower case without wrecking codes like "BBX 10ML". */
+const tidyServiceName = (s) => {
+  const t = String(s || "").trim();
+  return /^[a-z]/.test(t) ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+};
+
 const serviceByName = new Map();
 for (const s of rawServices) {
   if (!SERVICE_DEPTS.has(s.dept)) continue;
-  const name = String(s.name || "").trim();
+  const name = tidyServiceName(s.name);
   if (!name || num(s.price) <= 0) continue;
   const prev = serviceByName.get(name.toLowerCase());
   if (!prev || s.id > prev.id) {
@@ -292,8 +298,25 @@ for (const s of rawServices) {
     });
   }
 }
+/** Departments in the order reception actually reaches for them. */
+const DEPT_ORDER = [
+  "Cutting & Styling",
+  "Colour",
+  "Treatments",
+  "Brazilian & Keratin",
+  "Extensions",
+  "Mycro Keratin",
+  "Perms",
+  "Wella Straightening",
+];
+
+const deptRank = (d) => {
+  const i = DEPT_ORDER.indexOf(d);
+  return i === -1 ? DEPT_ORDER.length : i;
+};
+
 const services = [...serviceByName.values()].sort(
-  (a, b) => a.dept.localeCompare(b.dept) || a.price - b.price
+  (a, b) => deptRank(a.dept) - deptRank(b.dept) || a.price - b.price
 );
 
 const serviceLookup = new Map(services.map((s) => [s.name.toLowerCase(), s]));
@@ -321,8 +344,10 @@ function mapProduct(p) {
   };
 }
 
+// Back-bar products are used on clients, not sold, so many carry a cost but no
+// retail price. Keep anything that has either.
 const allProducts = rawProducts
-  .filter((p) => String(p.name || "").trim() && num(p.price) > 0)
+  .filter((p) => String(p.name || "").trim() && (num(p.price) > 0 || num(p.cost) > 0))
   .map(mapProduct);
 
 const products = {
@@ -374,7 +399,11 @@ function groupInvoices(rows) {
   return [...byInvoice.values()];
 }
 
-const invoices13m = groupInvoices(rawInvoices);
+// The demo presents DEMO_DATE as "today", so nothing in the dataset may be
+// dated after it. A handful of visits fall in the few trading days that follow.
+const invoices13m = groupInvoices(rawInvoices).filter(
+  (inv) => inv.date.slice(0, 10) <= DEMO_DATE
+);
 const visitsByClient = new Map();
 for (const inv of invoices13m) {
   const list = visitsByClient.get(inv.clientId) || [];
@@ -388,10 +417,13 @@ const vipThreshold = spends[Math.floor(spends.length * 0.1)] || Infinity;
 const clients = rawClients.map((c) => {
   const p = pseudonym(c.id);
   const r = idRng(c.id + 7);
-  const lastVisit = c.lastVisit ? String(c.lastVisit).slice(0, 10) : null;
   const visits = (visitsByClient.get(c.id) || [])
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 40);
+  const rawLast = c.lastVisit ? String(c.lastVisit).slice(0, 10) : null;
+  // Pull a post-demo-day last visit back to the newest visit we still show.
+  const lastVisit =
+    rawLast && rawLast > DEMO_DATE ? (visits[0]?.date.slice(0, 10) ?? null) : rawLast;
   const lifetimeSpend = money(c.lifetimeSpend);
   const visitCount = num(c.visitCount);
   const gapDays = lastVisit ? daysBetween(lastVisit, DEMO_DATE) : null;
@@ -428,27 +460,61 @@ const demoClientNames = new Map(
   [...demoClientIds].map((id) => [id, pseudonym(id).name])
 );
 
+/**
+ * MySalon's AppMins field is largely left at its default, so a diary built from
+ * it collapses into 15-minute blocks. Chair time is estimated from the service
+ * instead, which is both more realistic and how the salon actually books.
+ */
+function chairMinutes(descr, dept) {
+  const d = String(descr).toLowerCase();
+  if (/tape|weave|bond|extension|volo|hair ?piece/.test(d)) return 150;
+  if (/bbx|braz|keratin|mycro|straight/.test(d)) return 120;
+  if (/highlight|foil|balayage|whl|full head/.test(d)) return 120;
+  if (/tint|colour|color|toner|regrowth|roots/.test(d)) return 75;
+  if (/perm/.test(d)) return 90;
+  if (/treatment|trichoton|olaplex|masque|dht/.test(d)) return 30;
+  if (/cut and blow|cut & blow/.test(d)) return 60;
+  if (/blow ?wave|blow ?dry/.test(d)) return 45;
+  if (/cut|trim|fringe/.test(d)) return 30;
+  if (/wash|shampoo|spray/.test(d)) return 15;
+  if (dept === "Colour") return 75;
+  return 45;
+}
+
+const OPENING_MIN = 7 * 60;
+const END_OF_DAY_MIN = 19 * 60;
+const clampMinutes = (m) => Math.max(OPENING_MIN + 15, Math.min(END_OF_DAY_MIN, m));
+const hhmm = (m) =>
+  `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(Math.round(m) % 60).padStart(2, "0")}`;
+
 const bookings = demoInvoices.map((inv) => {
   const mainLine =
     inv.lines.find((l) => l.kind === "service") || inv.lines[0] || { descr: "Service", stylistId: null };
   const svc = serviceLookup.get(String(mainLine.descr).toLowerCase());
-  const start = inv.date.slice(11, 16);
-  const mins = svc?.mins || 45;
-  const [hh, mm] = start.split(":").map(Number);
-  const endMinutes = hh * 60 + mm + mins;
+  const dept = svc?.dept || "Cutting & Styling";
+  const mins = chairMinutes(mainLine.descr, dept);
+
+  // The invoice is rung up at checkout, so it marks the END of the appointment.
+  const [ih, im] = inv.date.slice(11, 16).split(":").map(Number);
+  const endMin = clampMinutes(ih * 60 + im);
+  // Never let the clamp push the start past the end.
+  const startMin = Math.min(endMin - 15, Math.max(OPENING_MIN, endMin - mins));
+
   return {
     invoiceId: inv.id,
     clientId: inv.clientId,
     clientName: demoClientNames.get(inv.clientId) || pseudonym(inv.clientId).name,
     stylistId: mainLine.stylistId,
     service: mainLine.descr,
-    dept: svc?.dept || "Cutting & Styling",
-    start,
-    end: `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`,
-    mins,
+    dept,
+    start: hhmm(startMin),
+    end: hhmm(endMin),
+    mins: endMin - startMin,
     total: inv.total,
   };
 });
+
+const knownStaffIds = new Set(staff.map((s) => s.id));
 
 const demoTotals = demoInvoices.reduce(
   (acc, inv) => ({
@@ -472,7 +538,9 @@ const demoday = {
     ...inv,
     clientName: demoClientNames.get(inv.clientId) || pseudonym(inv.clientId).name,
   })),
-  bookings: bookings.sort((a, b) => a.start.localeCompare(b.start)),
+  bookings: bookings
+    .filter((b) => knownStaffIds.has(b.stylistId))
+    .sort((a, b) => a.start.localeCompare(b.start)),
 };
 
 // ----------------------------------------------------------------- analytics
@@ -481,11 +549,17 @@ const totalMix12m =
   num(paymentMix.cash) + num(paymentMix.card) + num(paymentMix.eft) +
   num(paymentMix.toPay) + num(paymentMix.voucher);
 
+// The data ends mid-month, so the final month is incomplete and would render as
+// a cliff on any trend line. Drop it rather than imply a collapse in trade.
+const lastCompleteMonth = String(rawMeta.maxInvoiceDate).slice(0, 7);
+const lastCompleteYear = Number(String(rawMeta.maxInvoiceDate).slice(0, 4));
+
 const analytics = {
   revenueByYear: revenueByYear
     .map((r) => ({ year: r.yr, invoices: r.invoices, revenue: money(r.revenue) }))
     .sort((a, b) => a.year - b.year),
   revenueByMonth: revenueByMonth
+    .filter((r) => String(r.ym) < lastCompleteMonth)
     .map((r) => ({ ym: r.ym, invoices: r.invoices, revenue: money(r.revenue) }))
     .sort((a, b) => String(a.ym).localeCompare(String(b.ym))),
   dailyRevenue90: dailyRevenue90
@@ -501,6 +575,7 @@ const analytics = {
     .map((m) => ({
       year: m.yr, service: money(m.service), retail: money(m.retail),
       retailShare: Math.round((money(m.retail) / (money(m.service) + money(m.retail))) * 1000) / 10,
+      partial: m.yr >= lastCompleteYear,
     }))
     .sort((a, b) => a.year - b.year),
   paymentMix: {
@@ -592,11 +667,17 @@ if (nameLeaks.length || poolLeaks.length || phoneLeaks.length) {
 
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });
 
-// Visit history is bulky and only needed on a client's own page, so it ships
-// as a separate chunk that the client file loads on demand.
-const visits = Object.fromEntries(
-  clients.filter((c) => c.visits.length).map((c) => [c.id, c.visits.slice(0, 20)])
-);
+// Visit history is bulky and only ever needed for one client at a time, so each
+// client's history is written as its own small file the page fetches on demand.
+const VISIT_DIR = join(__dirname, "..", "public", "data", "visits");
+if (!existsSync(VISIT_DIR)) mkdirSync(VISIT_DIR, { recursive: true });
+let visitFiles = 0;
+for (const c of clients) {
+  if (!c.visits.length) continue;
+  writeFileSync(join(VISIT_DIR, `${c.id}.json`), JSON.stringify(c.visits.slice(0, 20)), "utf8");
+  visitFiles += 1;
+}
+
 const clientSummaries = clients.map(({ visits: _visits, ...rest }) => rest);
 
 const files = {
@@ -605,7 +686,6 @@ const files = {
   "services.json": services,
   "products.json": { ...products, till: tillProducts },
   "clients.json": clientSummaries,
-  "visits.json": visits,
   "demoday.json": demoday,
   "analytics.json": analytics,
 };
@@ -616,6 +696,7 @@ for (const [name, data] of Object.entries(files)) {
   console.log(`${name.padEnd(16)} ${String(kb).padStart(6)} KB`);
 }
 
+console.log(`visits/          ${String(visitFiles).padStart(6)} per-client files`);
 console.log(`\nDemo day: ${DEMO_DATE} - ${demoday.invoiceCount} invoices, R${demoTotals.total}`);
 console.log(`Clients: ${clients.length} (pseudonymized)  Services: ${services.length}  Products: ${meta.productsInDemo}`);
 console.log("Privacy check passed.");

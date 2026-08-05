@@ -51,16 +51,21 @@ export const earningStylists = staff
   .filter((s) => s.role === "stylist" && s.totalRevenue > 0)
   .sort((a, b) => b.totalRevenue - a.totalRevenue);
 
-export const serviceDepts = [...new Set(services.map((s) => s.dept))].sort();
+/** Preserves the transform's usage-based department order, not alphabetical. */
+export const serviceDepts = [...new Set(services.map((s) => s.dept))];
 
 export function servicesInDept(dept: string): Service[] {
   return services.filter((s) => s.dept === dept);
 }
 
-/** Visit history ships separately so it stays out of the main bundle. */
+/**
+ * Each client's visit history is a small static file, so opening a client file
+ * fetches only that person's history instead of the whole salon's.
+ */
 export async function loadVisits(clientId: number): Promise<Visit[]> {
-  const all = (await import("@/data/visits.json")).default as Record<string, Visit[]>;
-  return all[String(clientId)] ?? [];
+  const res = await fetch(`/data/visits/${clientId}.json`);
+  if (!res.ok) return [];
+  return (await res.json()) as Visit[];
 }
 
 // -------------------------------------------------------------- derivations

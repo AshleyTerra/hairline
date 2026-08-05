@@ -96,7 +96,7 @@ export function ItemCatalogue({ onAddService, onAddProduct }: ItemCatalogueProps
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-ink">{s.name}</span>
-                    <span className="block text-[11px] text-mutedink">{s.mins} min</span>
+                    <span className="block text-[11px] text-mutedink">{s.dept}</span>
                   </span>
                   <span className="tnum shrink-0 text-sm font-semibold text-ink">
                     {zar(s.price)}

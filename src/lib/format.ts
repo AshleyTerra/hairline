@@ -68,8 +68,9 @@ export function daysBetween(from: string, to: string): number {
 export function relativeToDemo(iso: string | null, demoDate: string): string {
   if (!iso) return "never";
   const days = daysBetween(iso, demoDate);
-  if (days < 0) return "upcoming";
-  if (days === 0) return "today";
+  // A handful of visits fall in the few days after the demo trading day; read
+  // those as "today" rather than the nonsensical "upcoming".
+  if (days <= 0) return "today";
   if (days === 1) return "yesterday";
   if (days < 31) return `${days} days ago`;
   const months = Math.round(days / 30.44);
