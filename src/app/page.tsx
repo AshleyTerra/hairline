@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
 import {
   ColumnChart,
   MixBars,
@@ -281,11 +280,7 @@ function OwnerDashboard({
 
 function StylistDashboard({ stylistId }: { stylistId: number }) {
   const me = getStaff(stylistId);
-
-  const myBookings = useMemo(
-    () => demoday.bookings.filter((b) => b.stylistId === stylistId),
-    [stylistId]
-  );
+  const myBookings = demoday.bookings.filter((b) => b.stylistId === stylistId);
 
   if (!me) {
     return <PageHeader title="Stylist" subtitle="Pick a stylist in the role switcher." />;

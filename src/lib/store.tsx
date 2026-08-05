@@ -1,35 +1,80 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import type { PlayInvoice, Role } from "./types";
 
 const INVOICE_KEY = "hairline-demo-invoices";
 const ROLE_KEY = "hairline-demo-role";
 const STYLIST_KEY = "hairline-demo-stylist";
 
-interface StoreValue {
+interface DemoState {
   role: Role;
-  setRole: (role: Role) => void;
-  /** Which stylist the "Stylist" role is signed in as. */
   stylistId: number;
-  setStylistId: (id: number) => void;
   invoices: PlayInvoice[];
-  addInvoice: (invoice: Omit<PlayInvoice, "id" | "date">) => PlayInvoice;
-  clearInvoices: () => void;
-  hydrated: boolean;
 }
 
-const StoreContext = createContext<StoreValue | null>(null);
+const SERVER_STATE: DemoState = { role: "owner", stylistId: 0, invoices: [] };
 
-function readJson<T>(key: string, fallback: T): T {
+/**
+ * The demo's state lives outside React in a tiny observable store, read through
+ * useSyncExternalStore. The server always sees SERVER_STATE, so the first paint
+ * matches on both sides and localStorage is only touched on the client.
+ */
+class DemoStore {
+  private state: DemoState = SERVER_STATE;
+  private loaded = false;
+  private listeners = new Set<() => void>();
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  /** Returns a referentially stable snapshot, hydrating from storage once. */
+  getSnapshot = (): DemoState => {
+    if (!this.loaded) {
+      this.loaded = true;
+      this.state = {
+        role: read<Role>(ROLE_KEY, SERVER_STATE.role),
+        stylistId: read<number>(STYLIST_KEY, SERVER_STATE.stylistId),
+        invoices: read<PlayInvoice[]>(INVOICE_KEY, []),
+      };
+    }
+    return this.state;
+  };
+
+  getServerSnapshot = (): DemoState => SERVER_STATE;
+
+  private set(patch: Partial<DemoState>) {
+    this.state = { ...this.getSnapshot(), ...patch };
+    this.listeners.forEach((l) => l());
+  }
+
+  setRole(role: Role) {
+    write(ROLE_KEY, role);
+    this.set({ role });
+  }
+
+  setStylistId(stylistId: number) {
+    write(STYLIST_KEY, stylistId);
+    this.set({ stylistId });
+  }
+
+  addInvoice(invoice: Omit<PlayInvoice, "id" | "date">): PlayInvoice {
+    const created: PlayInvoice = { ...invoice, id: Date.now(), date: new Date().toISOString() };
+    const invoices = [created, ...this.getSnapshot().invoices];
+    write(INVOICE_KEY, invoices);
+    this.set({ invoices });
+    return created;
+  }
+
+  clearInvoices() {
+    write(INVOICE_KEY, []);
+    this.set({ invoices: [] });
+  }
+}
+
+function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(key);
@@ -39,6 +84,17 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
+function write(key: string, value: unknown): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage can be unavailable in private mode; the demo still works in memory.
+  }
+}
+
+const store = new DemoStore();
+
+/** Kept as a component so the app tree reads the same as before. */
 export function StoreProvider({
   children,
   defaultStylistId,
@@ -46,84 +102,31 @@ export function StoreProvider({
   children: ReactNode;
   defaultStylistId: number;
 }) {
-  const [role, setRoleState] = useState<Role>("owner");
-  const [stylistId, setStylistIdState] = useState<number>(defaultStylistId);
-  const [invoices, setInvoices] = useState<PlayInvoice[]>([]);
-  const [hydrated, setHydrated] = useState(false);
-
-  // Restore after mount so server and client render the same first paint.
-  useEffect(() => {
-    setRoleState(readJson<Role>(ROLE_KEY, "owner"));
-    setStylistIdState(readJson<number>(STYLIST_KEY, defaultStylistId));
-    setInvoices(readJson<PlayInvoice[]>(INVOICE_KEY, []));
-    setHydrated(true);
-  }, [defaultStylistId]);
-
-  const persist = useCallback((key: string, value: unknown) => {
-    try {
-      window.localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      // Storage can be unavailable (private mode); the demo still works in-memory.
-    }
-  }, []);
-
-  const setRole = useCallback(
-    (next: Role) => {
-      setRoleState(next);
-      persist(ROLE_KEY, next);
-    },
-    [persist]
-  );
-
-  const setStylistId = useCallback(
-    (next: number) => {
-      setStylistIdState(next);
-      persist(STYLIST_KEY, next);
-    },
-    [persist]
-  );
-
-  const addInvoice = useCallback(
-    (invoice: Omit<PlayInvoice, "id" | "date">) => {
-      const created: PlayInvoice = {
-        ...invoice,
-        id: Date.now(),
-        date: new Date().toISOString(),
-      };
-      setInvoices((prev) => {
-        const next = [created, ...prev];
-        persist(INVOICE_KEY, next);
-        return next;
-      });
-      return created;
-    },
-    [persist]
-  );
-
-  const clearInvoices = useCallback(() => {
-    setInvoices([]);
-    persist(INVOICE_KEY, []);
-  }, [persist]);
-
-  const value = useMemo(
-    () => ({
-      role,
-      setRole,
-      stylistId,
-      setStylistId,
-      invoices,
-      addInvoice,
-      clearInvoices,
-      hydrated,
-    }),
-    [role, setRole, stylistId, setStylistId, invoices, addInvoice, clearInvoices, hydrated]
-  );
-
-  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
+  SERVER_STATE.stylistId ||= defaultStylistId;
+  return <>{children}</>;
 }
 
-export function useStore(): StoreValue {
-  const ctx = useContext(StoreContext);
-  if (!ctx) throw new Error("useStore must be used inside StoreProvider");
-  return ctx;
+export function useStore() {
+  const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
+
+  const setRole = useCallback((role: Role) => store.setRole(role), []);
+  const setStylistId = useCallback((id: number) => store.setStylistId(id), []);
+  const addInvoice = useCallback(
+    (invoice: Omit<PlayInvoice, "id" | "date">) => store.addInvoice(invoice),
+    []
+  );
+  const clearInvoices = useCallback(() => store.clearInvoices(), []);
+
+  return useMemo(
+    () => ({
+      role: state.role,
+      stylistId: state.stylistId,
+      invoices: state.invoices,
+      setRole,
+      setStylistId,
+      addInvoice,
+      clearInvoices,
+    }),
+    [state, setRole, setStylistId, addInvoice, clearInvoices]
+  );
 }

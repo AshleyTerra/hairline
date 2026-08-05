@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en-ZA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hairline Salon Manager — from eleven years of data to a working system</title>
+<style>
+/* ===========================================
+   VIEWPORT FITTING: MANDATORY BASE
+   =========================================== */
+html, body { height: 100%; overflow-x: hidden; }
+html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+
+:root {
+  --title-size: clamp(1.5rem, 5vw, 4rem);
+  --h2-size: clamp(1.25rem, 3.5vw, 2.5rem);
+  --h3-size: clamp(1rem, 2.5vw, 1.75rem);
+  --body-size: clamp(0.8rem, 1.5vw, 1.125rem);
+  --small-size: clamp(0.65rem, 1vw, 0.875rem);
+  --slide-padding: clamp(1.25rem, 5vw, 5rem);
+  --content-gap: clamp(0.5rem, 2vw, 2rem);
+  --element-gap: clamp(0.25rem, 1vw, 1rem);
+
+  /* Hairline brand */
+  --taupe: #8a7f6f;
+  --taupe-deep: #6e6455;
+  --taupe-soft: #b3a898;
+  --ink: #1a1816;
+  --body: #3a362f;
+  --muted: #7a7264;
+  --paper: #faf9f7;
+  --card: #ffffff;
+  --rule: #e2ded7;
+  --rule-soft: #edeae4;
+  --chip: #f1eee8;
+  --good: #4c7a5a;
+  --warn: #a8762a;
+  --crit: #a0433a;
+  --accent: #c08428;
+  --teal: #0a86a8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--body);
+  font-family: "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.slide {
+  width: 100vw; height: 100vh; height: 100dvh;
+  overflow: hidden; scroll-snap-align: start;
+  display: flex; flex-direction: column; position: relative;
+}
+
+.slide-content {
+  flex: 1; display: flex; flex-direction: column; justify-content: center;
+  max-height: 100%; overflow: hidden; padding: var(--slide-padding);
+  max-width: 1180px; margin: 0 auto; width: 100%;
+}
+
+/* ------------------------------------------ type */
+h1, h2, h3 { margin: 0; color: var(--ink); font-weight: 300; text-wrap: balance; }
+h1 { font-size: var(--title-size); line-height: 1.05; letter-spacing: -0.01em; }
+h2 { font-size: var(--h2-size); line-height: 1.15; }
+h3 { font-size: var(--h3-size); font-weight: 600; }
+p { font-size: var(--body-size); line-height: 1.6; margin: 0; }
+strong { color: var(--ink); font-weight: 600; }
+
+.eyebrow {
+  font-size: var(--small-size); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--taupe); font-weight: 600; margin-bottom: var(--element-gap);
+}
+
+.lede { font-size: clamp(0.9rem, 1.9vw, 1.35rem); line-height: 1.55; max-width: 62ch; }
+
+.wordmark {
+  font-weight: 200; letter-spacing: 0.02em; line-height: 1;
+  font-size: clamp(2.5rem, 9vw, 6.5rem); color: var(--taupe);
+}
+.wordmark .bar { color: var(--ink); font-weight: 100; }
+.wordmark .line { color: var(--ink); font-weight: 300; }
+
+/* ------------------------------------------ layout helpers */
+.stack { display: flex; flex-direction: column; gap: var(--content-gap); }
+.row { display: flex; gap: var(--content-gap); flex-wrap: wrap; }
+.grid {
+  display: grid; gap: clamp(0.5rem, 1.5vw, 1.1rem);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+}
+.two-col { display: grid; gap: clamp(1rem, 3vw, 3rem); grid-template-columns: 1fr 1fr; align-items: center; }
+@media (max-width: 820px) { .two-col { grid-template-columns: 1fr; } }
+
+.rule { height: 1px; background: var(--rule); border: 0; margin: 0; }
+
+/* ------------------------------------------ components */
+.stat-row { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+.stat-row.four { grid-template-columns: repeat(4, 1fr); }
+.stat-row.three { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 700px) { .stat-row.four, .stat-row.three { grid-template-columns: repeat(2, 1fr); } }
+.stat { background: var(--card); padding: clamp(0.6rem, 1.6vw, 1.2rem); }
+.stat b {
+  display: block; font-weight: 300; color: var(--ink); line-height: 1.1;
+  font-size: clamp(1.1rem, 3.2vw, 2.2rem); letter-spacing: -0.01em;
+}
+.stat span {
+  display: block; margin-top: 0.35em; font-size: var(--small-size);
+  letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted);
+}
+
+.card {
+  background: var(--card); border: 1px solid var(--rule);
+  padding: clamp(0.7rem, 1.8vw, 1.3rem);
+}
+.card h3 { margin-bottom: 0.35em; font-size: clamp(0.85rem, 1.6vw, 1.05rem); }
+.card p { font-size: var(--small-size); color: var(--muted); line-height: 1.5; }
+.card .num {
+  font-size: clamp(0.7rem, 1.1vw, 0.8rem); color: var(--taupe);
+  font-weight: 700; letter-spacing: 0.1em; display: block; margin-bottom: 0.4em;
+}
+
+ul.clean { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: clamp(0.4rem, 1.2vh, 0.9rem); }
+ul.clean li { font-size: var(--body-size); line-height: 1.45; padding-left: 1.4em; position: relative; }
+ul.clean li::before {
+  content: ""; position: absolute; left: 0; top: 0.6em;
+  width: 0.55em; height: 1px; background: var(--taupe);
+}
+
+.pill {
+  display: inline-block; background: var(--chip); color: var(--taupe-deep);
+  padding: 0.35em 0.9em; border-radius: 999px; font-size: var(--small-size);
+  font-weight: 600; letter-spacing: 0.04em;
+}
+
+table.data { border-collapse: collapse; width: 100%; font-size: var(--small-size); }
+table.data th {
+  text-align: left; font-size: clamp(0.6rem, 0.9vw, 0.72rem); letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--muted); font-weight: 600;
+  padding: 0.5em 0.9em 0.5em 0; border-bottom: 1px solid var(--taupe);
+}
+table.data td { padding: 0.55em 0.9em 0.55em 0; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+table.data td:first-child { color: var(--ink); font-weight: 500; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Phase timeline */
+.phases { list-style: none; margin: 0; padding: 0; }
+.phases li {
+  position: relative; padding: 0 0 clamp(0.5rem, 1.6vh, 1.1rem) 1.9em;
+  border-left: 1px solid var(--rule); margin-left: 0.5em;
+  font-size: var(--body-size); line-height: 1.45;
+}
+.phases li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.phases li::before {
+  content: ""; position: absolute; left: calc(-1 * 5px); top: 0.45em;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--paper); border: 2px solid var(--taupe);
+}
+.phases .dur { color: var(--muted); font-size: var(--small-size); }
+
+/* Before / after */
+.ba { display: grid; grid-template-columns: 1fr auto 1fr; gap: clamp(0.7rem, 2vw, 1.8rem); align-items: stretch; }
+@media (max-width: 780px) { .ba { grid-template-columns: 1fr; } .ba .arrow { display: none; } }
+.ba .arrow { align-self: center; color: var(--taupe); font-size: clamp(1.2rem, 3vw, 2rem); }
+.ba .then { background: var(--card); border: 1px solid var(--rule); padding: clamp(0.7rem, 2vw, 1.4rem); }
+.ba .now { background: var(--ink); color: #efece6; padding: clamp(0.7rem, 2vw, 1.4rem); }
+.ba .now h3 { color: #fff; }
+.ba .now li { color: #d6d1c7; }
+.ba .now li::before { background: var(--taupe-soft); }
+.ba h3 { font-size: clamp(0.8rem, 1.5vw, 1rem); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.6em; }
+
+/* Dark slide variant */
+.slide.dark { background: var(--ink); }
+.slide.dark h1, .slide.dark h2, .slide.dark h3 { color: #f6f3ee; }
+.slide.dark p, .slide.dark li { color: #cfc9bd; }
+.slide.dark .eyebrow { color: var(--taupe-soft); }
+.slide.dark .rule { background: #35302a; }
+.slide.dark strong { color: #fff; }
+.slide.dark ul.clean li::before { background: var(--taupe-soft); }
+
+/* Big quote / punch */
+.punch { font-size: clamp(1.3rem, 4.4vw, 3.2rem); font-weight: 300; line-height: 1.15; color: var(--ink); text-wrap: balance; }
+.slide.dark .punch { color: #f6f3ee; }
+.punch em { font-style: normal; color: var(--taupe); }
+.slide.dark .punch em { color: var(--taupe-soft); }
+
+/* Chrome */
+.slide-num {
+  position: absolute; bottom: clamp(0.6rem, 2vh, 1.4rem); right: clamp(0.9rem, 3vw, 2.5rem);
+  font-size: var(--small-size); color: var(--muted); letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+}
+.slide.dark .slide-num { color: #6b6357; }
+.brandmark {
+  position: absolute; top: clamp(0.7rem, 2.5vh, 1.6rem); left: clamp(0.9rem, 3vw, 2.5rem);
+  font-size: clamp(0.75rem, 1.3vw, 0.95rem); font-weight: 200; letter-spacing: 0.03em; color: var(--taupe);
+}
+.brandmark .bar { color: var(--ink); }
+.brandmark .line { color: var(--ink); font-weight: 300; }
+.slide.dark .brandmark .bar, .slide.dark .brandmark .line { color: #efece6; }
+
+.progress {
+  position: fixed; top: 0; left: 0; height: 2px; background: var(--taupe);
+  z-index: 100; transition: width 0.25s ease; width: 0;
+}
+.hint {
+  position: fixed; bottom: clamp(0.6rem, 2vh, 1.4rem); left: 50%; transform: translateX(-50%);
+  font-size: var(--small-size); color: var(--muted); z-index: 50;
+  background: rgba(250,249,247,0.9); padding: 0.3em 0.9em; border-radius: 999px;
+  transition: opacity 0.5s ease;
+}
+
+/* Reveal animation */
+.reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.6s ease, transform 0.6s ease; }
+.slide.visible .reveal { opacity: 1; transform: none; }
+.slide.visible .reveal:nth-child(2) { transition-delay: 0.08s; }
+.slide.visible .reveal:nth-child(3) { transition-delay: 0.16s; }
+.slide.visible .reveal:nth-child(4) { transition-delay: 0.24s; }
+.slide.visible .reveal:nth-child(5) { transition-delay: 0.32s; }
+
+/* Short-viewport tuning */
+@media (max-height: 700px) {
+  :root { --slide-padding: clamp(0.9rem, 3.5vw, 2.4rem); --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+          --title-size: clamp(1.25rem, 4.5vw, 2.6rem); --h2-size: clamp(1rem, 3vw, 1.8rem); }
+}
+@media (max-height: 600px) {
+  :root { --slide-padding: clamp(0.6rem, 2.5vw, 1.5rem); --content-gap: clamp(0.3rem, 1vw, 0.75rem);
+          --title-size: clamp(1.1rem, 4vw, 2rem); --body-size: clamp(0.7rem, 1.2vw, 0.95rem); }
+  .hint { display: none; }
+}
+@media (max-height: 500px) {
+  :root { --slide-padding: clamp(0.5rem, 2vw, 1rem); --title-size: clamp(1rem, 3.5vw, 1.5rem);
+          --h2-size: clamp(0.9rem, 2.5vw, 1.25rem); --body-size: clamp(0.65rem, 1vw, 0.85rem); }
+  .slide-num { display: none; }
+}
+@media (max-width: 600px) { :root { --title-size: clamp(1.25rem, 7vw, 2.5rem); } .grid { grid-template-columns: 1fr; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.2s !important; }
+  html { scroll-behavior: auto; }
+  .reveal { opacity: 1; transform: none; }
+}
+
+@media print {
+  html { scroll-snap-type: none; }
+  .slide { page-break-after: always; height: 100vh; }
+  .hint, .progress { display: none; }
+  .reveal { opacity: 1 !important; transform: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<div class="hint" id="hint">Use ← → or scroll</div>
+
+<main>
+
+<!-- 1 ─ Title -->
+<section class="slide" id="s1">
+  <div class="slide-content stack">
+    <div class="reveal">
+      <div class="wordmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+    </div>
+    <div class="reveal">
+      <hr class="rule">
+    </div>
+    <div class="reveal stack" style="gap:0.6em">
+      <h1>Salon Manager</h1>
+      <p class="lede">A working prototype, built on eleven years of Hairline's own trading data.</p>
+    </div>
+    <div class="reveal row" style="gap:0.5em">
+      <span class="pill">Discovery</span>
+      <span class="pill">Plan</span>
+      <span class="pill">Live prototype</span>
+    </div>
+  </div>
+  <div class="slide-num">01</div>
+</section>
+
+<!-- 2 ─ The brief -->
+<section class="slide">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">The brief</p>
+    <h2 class="reveal">Replace MySalon with something the team will actually use.</h2>
+    <div class="reveal two-col">
+      <ul class="clean">
+        <li>Cover the whole salon operation, but <strong>keep it simple</strong> — no overkill.</li>
+        <li>Focus on invoicing, client history, pricing, stock, and staff.</li>
+        <li>Win buy-in from reception, stylists <em>and</em> the owner.</li>
+        <li>Build it properly — this could be a product for other salons.</li>
+      </ul>
+      <div class="card">
+        <span class="num">THE TEST WE SET OURSELVES</span>
+        <h3>The new till must be faster than the old one.</h3>
+        <p>Every study of salon software adoption says the same thing: if checkout slows down, the team stops using it, whatever else the system can do.</p>
+      </div>
+    </div>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">02</div>
+</section>
+
+<!-- 3 ─ What we did first -->
+<section class="slide dark">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">Before designing anything</p>
+    <h2 class="reveal">We restored the salon's database and read eleven years of it.</h2>
+    <p class="lede reveal">Not a workshop, not assumptions — the actual record of how Hairline trades, from the July 2026 MySalon backup.</p>
+    <div class="reveal stat-row four">
+      <div class="stat"><b>90,183</b><span>invoices since 2015</span></div>
+      <div class="stat"><b>8,645</b><span>active clients</span></div>
+      <div class="stat"><b>R7.5m</b><span>revenue in 2025</span></div>
+      <div class="stat"><b>92</b><span>database tables read</span></div>
+    </div>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">03</div>
+</section>
+
+<!-- 4 ─ What the data said -->
+<section class="slide">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">What the data said</p>
+    <h2 class="reveal">The salon told us what to build — and what to leave out.</h2>
+    <div class="reveal two-col" style="align-items:start">
+      <div>
+        <h3 style="color:var(--good);margin-bottom:0.5em">Used every single day</h3>
+        <table class="data">
+          <tr><td>Invoicing</td><td class="tnum">90,183 invoices</td></tr>
+          <tr><td>Cash-up</td><td class="tnum">3,841 daily counts</td></tr>
+          <tr><td>Stock takes</td><td class="tnum">49,663 items counted</td></tr>
+          <tr><td>Clocking in</td><td class="tnum">11,069 records</td></tr>
+          <tr><td>Tips &amp; staff advances</td><td class="tnum">4,478 records</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3 style="color:var(--crit);margin-bottom:0.5em">Never used in 11 years</h3>
+        <table class="data">
+          <tr><td>Payroll</td><td>0 records</td></tr>
+          <tr><td>Loyalty points</td><td>0 records</td></tr>
+          <tr><td>Packages</td><td>0 records</td></tr>
+          <tr><td>Bank reconciliation</td><td>0 records</td></tr>
+          <tr><td>Appointment diary</td><td>48 records in 11 years</td></tr>
+        </table>
+      </div>
+    </div>
+    <p class="reveal" style="color:var(--muted)">Every unused feature we leave out is a screen reception never has to learn.</p>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">04</div>
+</section>
+
+<!-- 5 ─ Things worth knowing -->
+<section class="slide">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">Four things the data revealed</p>
+    <h2 class="reveal">Findings the salon can act on today.</h2>
+    <div class="reveal grid">
+      <div class="card">
+        <span class="num">01 — STOCK</span>
+        <h3 style="color:var(--crit)">1,350 lines show negative stock</h3>
+        <p>Sales rung up against stock that was never received. Nearly 40% of the stock file can't be trusted until it's counted.</p>
+      </div>
+      <div class="card">
+        <span class="num">02 — CLIENTS</span>
+        <h3 style="color:var(--warn)">758 clients have quietly lapsed</h3>
+        <p>They visited in the last year but not in 90 days. The cheapest revenue in the salon is a message to this list.</p>
+      </div>
+      <div class="card">
+        <span class="num">03 — PAYMENTS</span>
+        <h3 style="color:var(--teal)">89% of takings are on card</h3>
+        <p>Cash is barely 5%. The cash-up ritual guards a small and shrinking share of the money.</p>
+      </div>
+      <div class="card">
+        <span class="num">04 — MARKETING</span>
+        <h3 style="color:var(--warn)">Only 8% have a birthday on file</h3>
+        <p>718 of 8,645. And just 76 have an e-mail address — but 8,603 have a phone number. SMS and WhatsApp, not e-mail.</p>
+      </div>
+    </div>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">05</div>
+</section>
+
+<!-- 6 ─ The decision -->
+<section class="slide dark">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">The decision</p>
+    <p class="punch reveal">Build the <em>daily essentials</em> exceptionally well.<br>Leave out everything the salon has already voted against.</p>
+    <div class="reveal">
+      <hr class="rule">
+    </div>
+    <div class="reveal row" style="gap:0.5em">
+      <span class="pill">Invoicing &amp; cash-up</span>
+      <span class="pill">Clients &amp; history</span>
+      <span class="pill">Pricing &amp; menus</span>
+      <span class="pill">Stock control</span>
+      <span class="pill">Staff portfolios</span>
+      <span class="pill">Client messaging</span>
+      <span class="pill">A light diary</span>
+    </div>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">06</div>
+</section>
+
+<!-- 7 ─ Then and now -->
+<section class="slide">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">What changes</p>
+    <h2 class="reveal">Same rituals, twenty years of technology later.</h2>
+    <div class="reveal ba">
+      <div class="then">
+        <h3 style="color:var(--muted)">MySalon today</h3>
+        <ul class="clean">
+          <li>One PC in the salon. If it dies, trading stops.</li>
+          <li>SQL Server 2005 under the hood.</li>
+          <li>Price menus retyped in Word every year.</li>
+          <li>Figures only visible at reception.</li>
+          <li>Dated SMS; no WhatsApp.</li>
+        </ul>
+      </div>
+      <div class="arrow">→</div>
+      <div class="now">
+        <h3>Salon Manager</h3>
+        <ul class="clean">
+          <li>Cloud-hosted, with a till that keeps working offline.</li>
+          <li>Modern web app on any device.</li>
+          <li>Client menu generated from live prices.</li>
+          <li>Takings on the owner's phone, anywhere.</li>
+          <li>SMS now, WhatsApp next.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">07</div>
+</section>
+
+<!-- 8 ─ The prototype -->
+<section class="slide dark">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">Not a mock-up</p>
+    <p class="punch reveal">We built it. It's <em>running</em>, on the salon's own data.</p>
+    <p class="lede reveal">Eight working screens loaded with real services, real prices, real stock and eleven years of real visit patterns. Client names are anonymised; nothing else is invented.</p>
+    <div class="reveal stat-row three">
+      <div class="stat"><b>750</b><span>client histories</span></div>
+      <div class="stat"><b>228</b><span>real services priced</span></div>
+      <div class="stat"><b>2,494</b><span>stock lines</span></div>
+    </div>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">08</div>
+</section>
+
+<!-- 9 ─ The till -->
+<section class="slide">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">The screen that decides everything</p>
+    <h2 class="reveal">The till, with a stopwatch on it.</h2>
+    <div class="reveal two-col">
+      <ul class="clean">
+        <li>Client, services, products, discount, payment — <strong>one screen</strong>.</li>
+        <li>Split payments across cash, card, EFT and vouchers.</li>
+        <li>Tips captured per stylist at the moment of payment.</li>
+        <li>A timer runs while you work, so the 30-second target is visible, not theoretical.</li>
+        <li>Keeps working when the internet drops; syncs when it returns.</li>
+      </ul>
+      <div class="card">
+        <span class="num">HOW WE KNOW THE MATHS IS RIGHT</span>
+        <h3>18 automated tests on the money logic</h3>
+        <p>VAT, quantities, percentage discounts, split payments, change on cash, voucher limits and tips are each tested independently of the screen — so the arithmetic is proven, not hoped for.</p>
+      </div>
+    </div>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">09</div>
+</section>
+
+<!-- 10 ─ Client history -->
+<section class="slide">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">The salon's most valuable asset</p>
+    <h2 class="reveal">Every client, every visit, instantly.</h2>
+    <div class="reveal two-col">
+      <ul class="clean">
+        <li>Search by name or phone; open a full visit timeline in one click.</li>
+        <li>Every service, product, price and stylist — back to 2015.</li>
+        <li>Colour formulas and medical flags travel with the client.</li>
+        <li>Filters for lapsed clients, top spenders and this month's birthdays.</li>
+        <li>A win-back message is two clicks from the list.</li>
+      </ul>
+      <div class="card">
+        <span class="num">WHY IT MATTERS</span>
+        <h3>1,709 clients have visited 10 times or more</h3>
+        <p>That loyal core is the business. Their history is currently locked inside a 2005 database on one machine. Migrating it intact is non-negotiable.</p>
+      </div>
+    </div>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">10</div>
+</section>
+
+<!-- 11 ─ Everyone gets a view -->
+<section class="slide">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">Buy-in by design</p>
+    <h2 class="reveal">Three people, three different systems.</h2>
+    <div class="reveal grid">
+      <div class="card">
+        <span class="num">OWNER</span>
+        <h3>The business, on your phone</h3>
+        <p>Takings so far today, month against last, top stylists, stock value, retail share, and what needs attention — without phoning the salon.</p>
+      </div>
+      <div class="card">
+        <span class="num">RECEPTION</span>
+        <h3>A faster front desk</h3>
+        <p>Till, clients, diary, stock and the familiar denomination cash-up. No profit reports, no staff pay — less to learn, less to get wrong.</p>
+      </div>
+      <div class="card">
+        <span class="num">STYLIST</span>
+        <h3>Their own numbers</h3>
+        <p>Today's clients, month against target, tips earned, retail share. Their figures, on their own phone — the difference between a system done <em>to</em> the team and <em>for</em> them.</p>
+      </div>
+    </div>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">11</div>
+</section>
+
+<!-- 12 ─ Rollout -->
+<section class="slide">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">Going live without risk</p>
+    <h2 class="reveal">Nothing switches over until the numbers match.</h2>
+    <ol class="phases reveal">
+      <li><strong>Build the heart</strong> — till, cash-up, clients, loaded with migrated data. <span class="dur">6–8 weeks</span></li>
+      <li><strong>Shadow run</strong> — the new till runs alongside MySalon; daily totals must match to the cent. <span class="dur">2 weeks</span></li>
+      <li><strong>Go live</strong> — invoicing and cash-up cut over; MySalon becomes read-only. <span class="dur">1 weekend</span></li>
+      <li><strong>Stock &amp; team</strong> — stock control, orders, stock takes, staff portfolios, time clock. <span class="dur">+4–6 weeks</span></li>
+      <li><strong>Messaging &amp; diary</strong> — SMS and WhatsApp templates, the light diary, stylist phone views. <span class="dur">+3–4 weeks</span></li>
+    </ol>
+    <p class="reveal" style="color:var(--muted)">Stylist dashboards arrive only after reception already trusts the till.</p>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">12</div>
+</section>
+
+<!-- 13 ─ Success -->
+<section class="slide dark">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">How we'll know it worked</p>
+    <h2 class="reveal">Five things, all of them measurable.</h2>
+    <ul class="clean reveal">
+      <li>A routine sale rung up in <strong>30 seconds or less</strong>; cash-up done in five minutes.</li>
+      <li>Shadow-run totals match MySalon <strong>to the cent</strong>, two weeks running.</li>
+      <li>Reception says they <strong>prefer the new till</strong> within a month.</li>
+      <li>The owner checks the day's takings <strong>on their phone</strong>, not by phoning in.</li>
+      <li><strong>Zero data loss</strong> — every historic visit still findable.</li>
+    </ul>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">13</div>
+</section>
+
+<!-- 14 ─ Over to you -->
+<section class="slide">
+  <div class="slide-content stack">
+    <p class="eyebrow reveal">Over to you</p>
+    <h2 class="reveal">Try the prototype, then five decisions.</h2>
+    <div class="reveal two-col" style="align-items:start">
+      <div class="card">
+        <span class="num">WHAT TO DO IN THE PROTOTYPE</span>
+        <ul class="clean" style="margin-top:0.4em">
+          <li>Ring up a sale on the <strong>Till</strong> and watch the timer.</li>
+          <li>Open a client and scroll their history.</li>
+          <li>Switch the role to <strong>Stylist</strong> and see their view.</li>
+          <li>Count the drawer on <strong>Cash-up</strong>.</li>
+        </ul>
+      </div>
+      <div>
+        <table class="data">
+          <tr><th colspan="2">Decisions we need</th></tr>
+          <tr><td>Name</td><td>Keep "Hairline Salon Manager"?</td></tr>
+          <tr><td>Price tiers</td><td>Confirm senior / junior levels</td></tr>
+          <tr><td>Card machine</td><td>Standalone, or integrated later?</td></tr>
+          <tr><td>WhatsApp</td><td>Register the salon number?</td></tr>
+          <tr><td>Diary</td><td>From day one, or ease into it?</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="reveal">
+      <hr class="rule">
+      <p style="margin-top:0.8em;color:var(--muted)">This plan is a conversation starter, not a contract. Everything in it can change.</p>
+    </div>
+  </div>
+  <div class="brandmark">HAIR<span class="bar">|</span><span class="line">line</span></div>
+  <div class="slide-num">14</div>
+</section>
+
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  const slides = Array.from(document.querySelectorAll(".slide"));
+  const progress = document.getElementById("progress");
+  const hint = document.getElementById("hint");
+
+  /** Drives navigation, the progress bar and reveal-on-enter animation. */
+  class Deck {
+    constructor(slides) {
+      this.slides = slides;
+      this.index = 0;
+      this.locked = false;
+      this.observe();
+      this.bindKeys();
+      this.bindWheel();
+      this.bindTouch();
+      this.update();
+      // The navigation hint has done its job after the first move.
+      this.hintTimer = setTimeout(() => this.hideHint(), 5000);
+    }
+
+    hideHint() {
+      if (hint) hint.style.opacity = "0";
+    }
+
+    observe() {
+      const io = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("visible");
+              this.index = this.slides.indexOf(entry.target);
+              this.update();
+            }
+          });
+        },
+        { threshold: 0.5 }
+      );
+      this.slides.forEach((s) => io.observe(s));
+    }
+
+    update() {
+      if (progress) {
+        progress.style.width = ((this.index + 1) / this.slides.length) * 100 + "%";
+      }
+    }
+
+    go(next) {
+      const target = Math.max(0, Math.min(this.slides.length - 1, next));
+      if (target === this.index) return;
+      this.slides[target].scrollIntoView({ behavior: "smooth" });
+      this.hideHint();
+    }
+
+    bindKeys() {
+      document.addEventListener("keydown", (e) => {
+        switch (e.key) {
+          case "ArrowRight":
+          case "ArrowDown":
+          case "PageDown":
+          case " ":
+            e.preventDefault();
+            this.go(this.index + 1);
+            break;
+          case "ArrowLeft":
+          case "ArrowUp":
+          case "PageUp":
+            e.preventDefault();
+            this.go(this.index - 1);
+            break;
+          case "Home":
+            e.preventDefault();
+            this.go(0);
+            break;
+          case "End":
+            e.preventDefault();
+            this.go(this.slides.length - 1);
+            break;
+        }
+      });
+    }
+
+    bindWheel() {
+      // Scroll-snap handles the motion; this only stops a single flick
+      // from skipping several slides at once.
+      let timer = null;
+      window.addEventListener(
+        "wheel",
+        () => {
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(() => { timer = null; }, 120);
+        },
+        { passive: true }
+      );
+    }
+
+    bindTouch() {
+      let startY = null;
+      window.addEventListener("touchstart", (e) => { startY = e.touches[0].clientY; }, { passive: true });
+      window.addEventListener("touchend", (e) => {
+        if (startY === null) return;
+        const dy = startY - e.changedTouches[0].clientY;
+        if (Math.abs(dy) > 60) this.go(this.index + (dy > 0 ? 1 : -1));
+        startY = null;
+      }, { passive: true });
+    }
+  }
+
+  slides[0].classList.add("visible");
+  new Deck(slides);
+})();
+</script>
+
+</body>
+</html>
