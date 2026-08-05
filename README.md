@@ -6,6 +6,26 @@ own data so the owner and team can judge it against how the salon actually runs.
 **Plan document:** [docs/superpowers/specs/2026-08-05-hairline-salon-manager-design.md](docs/superpowers/specs/2026-08-05-hairline-salon-manager-design.md)
 **Presentation deck:** `/deck` once deployed (source: `public/deck/index.html`)
 
+## Signing in
+
+The prototype opens on a sign-in screen. Every account uses the password **`hairline2026`**:
+
+| Username | Opens as | Sees |
+|---|---|---|
+| `owner` | Salon Owner | Everything — takings, reports, costs, stock, the team |
+| `reception` | Reception | Till, clients, diary, stock, cash-up |
+| `karin` | Karin M. | One stylist's own day, figures and tips |
+| `meagan` | Meagan V. | A second stylist, to compare portfolios |
+
+The accounts are listed on the sign-in screen itself and fill the form when clicked, so the
+owner can move between roles without being told the passwords.
+
+> **This is a demo gate, not authentication.** The prototype is a static site with no server,
+> so the credentials are part of the page the browser downloads and a determined visitor can
+> bypass them. It keeps the public link away from casual visitors and makes each role feel real.
+> Production needs server-side accounts, hashed passwords and sessions — that's in the plan,
+> not in this prototype.
+
 ## What's in it
 
 | Screen | What it demonstrates |

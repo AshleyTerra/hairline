@@ -69,7 +69,7 @@ export default function StaffMemberPage({ params }: { params: Promise<{ id: stri
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         {person.totalRevenue > 0 && (
           <Card>
             <CardTitle right={<span className="text-xs text-mutedink">Last 12 months</span>}>

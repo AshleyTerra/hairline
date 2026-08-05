@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useStore } from "@/lib/store";
 import type { Role } from "@/lib/types";
 import { Wordmark } from "./Wordmark";
-import { RoleSwitcher } from "./RoleSwitcher";
+import { UserCard } from "./UserCard";
 
 interface NavItem {
   href: string;
@@ -77,7 +77,7 @@ export function Nav() {
           ))}
         </nav>
         <div className="mt-auto pt-5">
-          <RoleSwitcher />
+          <UserCard />
         </div>
       </aside>
 
@@ -86,7 +86,7 @@ export function Nav() {
         <Link href="/" className="text-xl">
           <Wordmark />
         </Link>
-        <RoleSwitcher compact />
+        <UserCard compact />
       </header>
 
       {/* Mobile bottom bar */}

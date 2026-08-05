@@ -309,7 +309,7 @@ function StylistDashboard({ stylistId }: { stylistId: number }) {
         <StatTile label="Retail share" value={pct(me.retailShare, 1)} hint="Of your own turnover" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         <Card>
           <CardTitle right={<span className="text-xs text-mutedink">vs {zar0(me.monthlyTarget)}</span>}>
             Month against target
