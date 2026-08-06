@@ -163,6 +163,14 @@ export function isLocked(role: Role, screen: string): boolean {
   return LOCKED.some((l) => l.role === role && l.screen === screen);
 }
 
+/**
+ * Where a role should land. Reception has no dashboard, so sending everyone to
+ * "/" would drop them on a screen their own role forbids.
+ */
+export function homeFor(perms: Permissions, role: Role): string {
+  return SCREENS.find((s) => canAccess(perms, role, s.key))?.href ?? "/";
+}
+
 // ---------------------------------------------------------- client import
 
 export interface ImportedClient {

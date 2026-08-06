@@ -83,11 +83,11 @@ class DemoStore {
     this.listeners.forEach((l) => l());
   }
 
-  /** Returns true when the credentials matched and the session started. */
-  signIn(username: string, password: string): boolean {
+  /** Returns the signed-in user, or null when the credentials do not match. */
+  signIn(username: string, password: string): SignedInUser | null {
     const name = String(username ?? "").trim().toLowerCase();
     const account = this.getSnapshot().users.find((u) => u.username === name);
-    if (!name || !password || !account || account.password !== password) return false;
+    if (!name || !password || !account || account.password !== password) return null;
     const user: SignedInUser = {
       username: account.username,
       role: account.role,
@@ -100,7 +100,7 @@ class DemoStore {
       role: user.role,
       stylistId: user.staffId ?? this.getSnapshot().stylistId,
     });
-    return true;
+    return user;
   }
 
   signOut() {

@@ -23,14 +23,15 @@ describe("sign in", () => {
   });
 
   it("signs the owner in and switches the role", () => {
-    expect(demoStore.signIn("owner", "hairline2026")).toBe(true);
+    // signIn returns the user so the caller can route them to their own home.
+    expect(demoStore.signIn("owner", "hairline2026")?.role).toBe("owner");
     const state = demoStore.getSnapshot();
     expect(state.user?.displayName).toBe("Salon Owner");
     expect(state.role).toBe("owner");
   });
 
   it("signs a stylist in as their own staff record", () => {
-    expect(demoStore.signIn("karin", "hairline2026")).toBe(true);
+    expect(demoStore.signIn("karin", "hairline2026")?.staffId).toBe(1);
     const state = demoStore.getSnapshot();
     expect(state.role).toBe("stylist");
     expect(state.stylistId).toBe(1);
@@ -43,7 +44,7 @@ describe("sign in", () => {
   });
 
   it("refuses a wrong password and stays signed out", () => {
-    expect(demoStore.signIn("owner", "nope")).toBe(false);
+    expect(demoStore.signIn("owner", "nope")).toBeNull();
     expect(demoStore.getSnapshot().user).toBeNull();
   });
 

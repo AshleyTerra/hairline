@@ -8,7 +8,18 @@ import { LoginScreen } from "./LoginScreen";
 import { Wordmark } from "./Wordmark";
 import { longDate } from "@/lib/format";
 import { meta } from "@/lib/data";
-import { SCREENS, canAccess } from "@/lib/admin";
+import { SCREENS, canAccess, homeFor } from "@/lib/admin";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
+/** Navigates after paint, so the guard never sets state during render. */
+function Redirect({ to }: { to: string }) {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(to);
+  }, [router, to]);
+  return null;
+}
 
 /** Longest matching screen for a path, so /clients/123 resolves to "clients". */
 function screenFor(pathname: string): string | null {
@@ -39,6 +50,13 @@ export function AppGate({ children }: { children: ReactNode }) {
   }
 
   if (!user) return <LoginScreen />;
+
+  // The root is a landing page, not a deliberate destination — send a role that
+  // cannot open the dashboard to its own home rather than showing a dead end.
+  if (denied && pathname === "/") {
+    const home = homeFor(permissions, role);
+    if (home !== "/") return <Redirect to={home} />;
+  }
 
   // The menu hides screens a role cannot open; the URL must refuse them too.
   if (denied) {

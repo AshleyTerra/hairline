@@ -6,6 +6,7 @@ import {
   canAccess,
   defaultUsers,
   describeBackup,
+  homeFor,
   parseClientImport,
   removeUser,
   setUserRole,
@@ -134,6 +135,23 @@ describe("screen permissions", () => {
   it("never lets the owner lose the admin screen", () => {
     const perms = togglePermission(DEFAULT_PERMISSIONS, "owner", "admin");
     expect(canAccess(perms, "owner", "admin")).toBe(true);
+  });
+
+  it("lands each role on a screen it is actually allowed to open", () => {
+    for (const role of ["owner", "reception", "stylist"] as const) {
+      const href = homeFor(DEFAULT_PERMISSIONS, role);
+      const screen = SCREENS.find((s) => s.href === href);
+      expect(screen, `no screen for ${role} home ${href}`).toBeDefined();
+      expect(canAccess(DEFAULT_PERMISSIONS, role, screen!.key)).toBe(true);
+    }
+  });
+
+  it("sends reception to the till, not the dashboard they cannot open", () => {
+    expect(homeFor(DEFAULT_PERMISSIONS, "reception")).toBe("/till");
+  });
+
+  it("falls back to the root when a role has no screens at all", () => {
+    expect(homeFor({ ...DEFAULT_PERMISSIONS, stylist: [] }, "stylist")).toBe("/");
   });
 
   it("does not mutate the permissions it was given", () => {

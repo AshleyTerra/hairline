@@ -1,23 +1,30 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { DEMO_ACCOUNTS } from "@/lib/auth";
+import { homeFor } from "@/lib/admin";
 import { meta } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { Wordmark } from "./Wordmark";
 
 export function LoginScreen() {
-  const { signIn } = useStore();
+  const { signIn, permissions } = useStore();
+  const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!signIn(username, password)) {
+    const user = signIn(username, password);
+    if (!user) {
       setError("That username and password don't match. Check the demo sign-ins below.");
       setPassword("");
+      return;
     }
+    // Reception has no dashboard, so land everyone on a screen their role allows.
+    router.push(homeFor(permissions, user.role));
   }
 
   /** Fills the form from a demo account so the owner can get in with one click. */

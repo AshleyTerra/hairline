@@ -50,8 +50,9 @@ export function Nav() {
 
   return (
     <>
-      {/* Desktop icon rail — a counter-friendly 78px instead of a labelled sidebar */}
-      <aside className="no-print hidden w-[78px] shrink-0 flex-col items-center gap-1.5 bg-ink pb-4 pt-[18px] md:flex">
+      {/* Desktop icon rail — a counter-friendly 78px instead of a labelled sidebar.
+          Pinned to the viewport so it stays put while the page scrolls. */}
+      <aside className="no-print sticky top-0 hidden h-screen w-[78px] shrink-0 flex-col items-center gap-1.5 overflow-y-auto bg-ink pb-4 pt-[18px] md:flex">
         <Link
           href="/"
           className="mb-4 text-[19px] font-light leading-none text-white"
