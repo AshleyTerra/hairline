@@ -358,36 +358,42 @@ h2("The till", "Section 3")
 text("The most important screen in the system. Everything about it is built around one "
      "target: a routine sale rung up in under thirty seconds.", space_after=8)
 
+text("It is laid out like a point of sale rather than a form: a narrow icon rail down the "
+     "left, one search box across the top, big tappable tiles in the middle, and the money "
+     "on the right.", space_after=6)
+
 h3("Ringing up a sale")
-numbered(1, "by name or phone, or press ", bold_head="Find the client ")
-numbered(2, "the services from the tabs, then switch to Retail for products. Each one you "
-            "click drops into the sale on the right.", bold_head="Tap ")
-numbered(3, "if you need to: change the stylist, the quantity, or add a discount "
-            "percentage on any line.", bold_head="Adjust the line ")
-numbered(4, "if the client leaves one — it is recorded against the stylist, and kept out of "
-            "the sale total.", bold_head="Add a tip ")
-numbered(5, "Card, cash, EFT, voucher or account. You can split across several — the "
-            "balance updates as you go.", bold_head="Take the payment. ")
-numbered(6, "The button turns solid once the sale is covered.",
-         bold_head="Press Complete sale. ")
+numbered(1, "at the top. It searches clients, services and products at once, and a scanned "
+            "barcode drops straight into the sale.", bold_head="Type into the one search box ")
+numbered(2, "Tiles are grouped by department, biggest and most-used first. Each tap adds a "
+            "line to the receipt on the right.", bold_head="Or tap a tile. ")
+numbered(3, "to change the stylist, the quantity or a discount.",
+         bold_head="Tap the line on the receipt ")
+numbered(4, "if the client leaves one — recorded against the stylist and kept out of the sale "
+            "total.", bold_head="Add a tip ")
+numbered(5, "then type the amount on the keypad. Card, cash, EFT, voucher or account, and you "
+            "can split across several.", bold_head="Choose the payment method, ")
+numbered(6, "It takes the amount you typed and finishes the sale if that clears the balance.",
+         bold_head="Press the big dark button. ")
 
 screenshot("03-till-empty",
-           "The till before a sale starts. Services are grouped the way the salon works, with "
-           "the most-used department first.")
+           "The till before a sale starts. One search box, and the service menu as tiles.")
 
 screenshot("05-till-payment",
-           "A sale in progress: a real client, two services, VAT shown, and a card payment "
-           "covering the balance. The timer in the top right reads 5 seconds.")
+           "A sale in progress. The balance owing is the largest thing on screen, with the "
+           "keypad directly beneath it and the timer reading 4 seconds.")
 
 h3("Things worth knowing")
-bullet("counts from the moment you start the sale, so you can see the 30-second target "
-       "being met or missed.", bold_head="The timer ")
+bullet("counts from the moment you start the sale, so the 30-second target is visible rather "
+       "than theoretical.", bold_head="The timer ")
+bullet("is the anchor of the screen. When cash is over-tendered it turns green and the label "
+       "changes to Change due.", bold_head="The balance ")
 bullet("is shown for information, calculated at 15% inclusive — the prices are what the "
        "client pays.", bold_head="VAT ")
-bullet("is offered before you pick anyone, so a walk-in never slows you down.",
-       bold_head="Walk-in ")
-bullet("more than the total gives change; a card or voucher can never be over-captured.",
-       bold_head="Cash tendered ")
+bullet("is the default, so a walk-in never slows you down. Pick a client only when you want "
+       "the visit on their history.", bold_head="Walk-in ")
+bullet("voids the whole sale, including anything half-typed on the keypad.",
+       bold_head="Clear ")
 
 page_break()
 

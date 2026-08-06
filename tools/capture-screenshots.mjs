@@ -1,10 +1,15 @@
-/**
+﻿/**
  * Captures screenshots of the prototype for the user guide and the deck.
  * Signs in through the real login screen, then visits each screen in turn.
  */
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
+
+// A stale profile would still be signed in from the last run, so every shot
+// would be captured as the wrong user. Always start clean.
+const PROFILE = process.env.TEMP + "\\cdp-capture";
+rmSync(PROFILE, { recursive: true, force: true });
 
 const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const PORT = 9223;
@@ -22,8 +27,8 @@ const chrome = spawn(
     "--hide-scrollbars",
     "--force-device-scale-factor=2", // retina-quality images for print
     `--remote-debugging-port=${PORT}`,
-    "--user-data-dir=" + process.env.TEMP + "\\cdp-capture",
-    "--window-size=1440,900",
+    "--user-data-dir=" + PROFILE,
+    "--window-size=1440,1000",
     "about:blank",
   ],
   { stdio: "ignore" }
@@ -119,7 +124,7 @@ await evaluate(`
 await sleep(900);
 await evaluate(`
   (() => {
-    const item = document.querySelector('ul.absolute li button, .absolute li button');
+    const item = document.querySelector('.absolute button');
     if (item) item.click();
     return !!item;
   })()
@@ -128,7 +133,7 @@ await sleep(900);
 // Add two catalogue items.
 await evaluate(`
   (() => {
-    const buttons = Array.from(document.querySelectorAll('button')).filter(b => /R\\s?\\d/.test(b.textContent||''));
+    const buttons = Array.from(document.querySelectorAll('button')).filter(b => b.className.includes('min-h-[72px]'));
     if (buttons[2]) buttons[2].click();
     return buttons.length;
   })()
@@ -136,7 +141,7 @@ await evaluate(`
 await sleep(700);
 await evaluate(`
   (() => {
-    const buttons = Array.from(document.querySelectorAll('button')).filter(b => /R\\s?\\d/.test(b.textContent||''));
+    const buttons = Array.from(document.querySelectorAll('button')).filter(b => b.className.includes('min-h-[72px]'));
     if (buttons[5]) buttons[5].click();
     return buttons.length;
   })()
