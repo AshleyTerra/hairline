@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { zar } from "@/lib/format";
-import type { Payment, PaymentMethod, TillTotals } from "@/lib/types";
+import type { PaymentMethod, TillTotals } from "@/lib/types";
 
 const METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "card", label: "Card" },
@@ -12,39 +11,53 @@ const METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "topay", label: "To pay" },
 ];
 
+const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"];
 const NOTES = [500, 200, 100, 50];
 
 interface PaymentPanelProps {
   totals: TillTotals;
-  payments: Payment[];
-  onPay: (payment: Payment) => void;
-  onUnpay: (index: number) => void;
+  method: PaymentMethod;
+  onMethod: (method: PaymentMethod) => void;
+  amount: string;
+  /** Sets the whole amount, e.g. from a quick-tender button. */
+  onAmount: (amount: string) => void;
+  /** Appends one keypad key. Separate from onAmount so fast presses cannot
+   *  read a stale value and drop digits. */
+  onKey: (key: string) => void;
+  onTender: () => void;
+  onComplete: () => void;
 }
 
-export function PaymentPanel({ totals, payments, onPay, onUnpay }: PaymentPanelProps) {
-  const [method, setMethod] = useState<PaymentMethod>("card");
-  const [amount, setAmount] = useState("");
-
-  const value = Number(amount.replace(/[^\d.]/g, "")) || 0;
-
-  function submit(overrideAmount?: number) {
-    const pay = overrideAmount ?? value;
-    if (pay <= 0) return;
-    onPay({ method, amount: pay });
-    setAmount("");
-  }
+/**
+ * Methods, an on-screen keypad and the primary action. The keypad exists so the
+ * counter can be worked without reaching for a keyboard.
+ */
+export function PaymentPanel({
+  totals,
+  method,
+  onMethod,
+  amount,
+  onAmount,
+  onKey,
+  onTender,
+  onComplete,
+}: PaymentPanelProps) {
+  const owing = totals.balance > 0;
 
   return (
-    <div className="border-t border-hairline-soft p-4">
-      <div className="mb-2 flex flex-wrap gap-1">
+    <div className="px-5 pb-5 pt-4">
+      {/* Method */}
+      <div className="mb-3 grid grid-cols-5 gap-[5px]">
         {METHODS.map((m) => (
           <button
             key={m.value}
             type="button"
-            onClick={() => setMethod(m.value)}
+            onClick={() => onMethod(m.value)}
             aria-pressed={method === m.value}
-            className={`rounded px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-              method === m.value ? "bg-taupe text-white" : "bg-chip text-taupe-deep hover:bg-hairline"
+            className={`rounded-[10px] py-2.5 text-center text-[11.5px] font-semibold transition-colors ${
+              method === m.value
+                ? "bg-taupe text-white"
+                : "bg-canvas text-taupe-deep hover:bg-chip"
             }`}
           >
             {m.label}
@@ -52,80 +65,73 @@ export function PaymentPanel({ totals, payments, onPay, onUnpay }: PaymentPanelP
         ))}
       </div>
 
-      <div className="flex gap-2">
-        <input
-          type="text"
-          inputMode="decimal"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          placeholder="Amount"
-          aria-label={`${method} amount`}
-          className="tnum w-full rounded border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-mutedink"
-        />
-        <button
-          type="button"
-          onClick={() => submit()}
-          disabled={value <= 0}
-          className="shrink-0 rounded bg-taupe-deep px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+      {/* What is being tendered */}
+      <div className="mb-3 flex items-center justify-between gap-3 rounded-[10px] bg-canvas px-3.5 py-2.5">
+        <span className="text-[11px] uppercase tracking-[0.1em] text-faintink">Tender</span>
+        <span
+          className={`tnum text-[17px] font-semibold ${amount ? "text-ink" : "text-faintink"}`}
         >
-          Add
-        </button>
+          {amount ? `R ${amount}` : "—"}
+        </span>
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-1">
-        {totals.balance > 0 && (
+      {/* Quick tenders */}
+      <div className="mb-3 flex flex-wrap gap-[5px]">
+        {owing && (
           <button
             type="button"
-            onClick={() => submit(totals.balance)}
-            className="rounded bg-chip px-2.5 py-1 text-xs font-semibold text-taupe-deep hover:bg-hairline"
+            onClick={() => onAmount(String(totals.balance))}
+            className="rounded-[10px] bg-chip px-3 py-1.5 text-[11.5px] font-semibold text-taupe-deep transition-colors hover:bg-hairline"
           >
             Exact {zar(totals.balance)}
           </button>
         )}
         {method === "cash" &&
-          NOTES.filter((n) => n >= totals.balance).slice(-3).map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => submit(n)}
-              className="tnum rounded bg-chip px-2.5 py-1 text-xs font-semibold text-taupe-deep hover:bg-hairline"
-            >
-              R{n}
-            </button>
-          ))}
+          NOTES.filter((n) => n >= totals.balance)
+            .slice(-3)
+            .map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => onAmount(String(n))}
+                className="tnum rounded-[10px] bg-chip px-3 py-1.5 text-[11.5px] font-semibold text-taupe-deep transition-colors hover:bg-hairline"
+              >
+                R{n}
+              </button>
+            ))}
       </div>
 
-      {payments.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-1">
-          {payments.map((p, i) => (
-            <li
-              key={`${p.method}-${i}`}
-              className="flex items-center justify-between rounded bg-paper px-2.5 py-1.5 text-xs"
-            >
-              <span className="capitalize text-body">
-                {METHODS.find((m) => m.value === p.method)?.label ?? p.method}
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="tnum font-semibold text-ink">{zar(p.amount)}</span>
-                <button
-                  type="button"
-                  onClick={() => onUnpay(i)}
-                  aria-label={`Remove ${p.method} payment`}
-                  className="text-mutedink hover:text-crit"
-                >
-                  ✕
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* Keypad */}
+      <div className="mb-3 grid grid-cols-3 gap-[7px]">
+        {KEYS.map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onKey(key)}
+            aria-label={key === "⌫" ? "Delete last digit" : key}
+            className="tnum rounded-[10px] bg-canvas py-[13px] text-center text-[17px] font-semibold text-ink transition-colors hover:bg-chip active:bg-hairline"
+          >
+            {key}
+          </button>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={owing ? onTender : onComplete}
+        disabled={owing && !amount}
+        className={`w-full rounded-[11px] py-[17px] text-center text-[15px] font-semibold transition-colors ${
+          owing && !amount
+            ? "cursor-not-allowed bg-hairline text-mutedink"
+            : "bg-ink text-white hover:bg-black"
+        }`}
+      >
+        {owing
+          ? amount
+            ? `Take R ${amount} & complete`
+            : `${zar(totals.balance)} still owing`
+          : `Complete sale — ${zar(totals.subtotal)}`}
+      </button>
     </div>
   );
 }

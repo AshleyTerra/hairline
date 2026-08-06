@@ -4,12 +4,12 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import { ClientPicker } from "@/components/till/ClientPicker";
 import { ItemCatalogue } from "@/components/till/ItemCatalogue";
 import { PaymentPanel } from "@/components/till/PaymentPanel";
-import { PageHeader, Badge } from "@/components/ui";
-import { demoday, earningStylists, getClient, meta, staff } from "@/lib/data";
-import { zar, zar0, longDate } from "@/lib/format";
+import { GlobalSearch } from "@/components/till/GlobalSearch";
+import { demoday, earningStylists, getClient, getStaff, meta, staff } from "@/lib/data";
+import { initials, longDate, zar, zar0 } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { elapsedSeconds, emptyTill, tillReduce, totals as computeTotals } from "@/lib/till";
-import type { Payment, Product, Service, TillLine } from "@/lib/types";
+import type { Client, PaymentMethod, Product, Service, TillLine } from "@/lib/types";
 
 let lineCounter = 0;
 const nextKey = () => `line-${(lineCounter += 1)}`;
@@ -19,11 +19,14 @@ export default function TillPage() {
   const [till, dispatch] = useReducer(tillReduce, undefined, emptyTill);
   const [now, setNow] = useState(() => Date.now());
   const [toast, setToast] = useState<{ total: number; seconds: number } | null>(null);
+  const [query, setQuery] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("card");
+  const [amount, setAmount] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
 
   const totals = useMemo(() => computeTotals(till), [till]);
   const seconds = elapsedSeconds(till, now);
 
-  // Drive the "under 30 seconds" clock while a sale is open.
   useEffect(() => {
     if (till.startedAt == null) return;
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -59,34 +62,75 @@ export default function TillPage() {
   }
 
   function addProduct(product: Product) {
-    const line: TillLine = {
-      key: nextKey(),
-      descr: product.name,
-      price: product.price,
-      qty: 1,
-      disc: 0,
-      stylistId: defaultStylist,
-      kind: "product",
-    };
-    dispatch({ type: "add", line, at: Date.now() });
+    dispatch({
+      type: "add",
+      at: Date.now(),
+      line: {
+        key: nextKey(),
+        descr: product.name,
+        price: product.price,
+        qty: 1,
+        disc: 0,
+        stylistId: defaultStylist,
+        kind: "product",
+      },
+    });
   }
 
-  function complete() {
-    if (till.lines.length === 0 || totals.balance > 0) return;
+  function pickClient(client: Client) {
+    dispatch({
+      type: "setClient",
+      clientId: client.id,
+      clientName: client.name,
+      at: Date.now(),
+    });
+  }
+
+  /** Voids the sale, including anything half-typed on the keypad. */
+  function clearSale() {
+    dispatch({ type: "clear" });
+    setAmount("");
+    setMethod("card");
+    setEditing(null);
+  }
+
+  /** Keypad input. The functional update keeps every press, however fast. */
+  function pressKey(key: string) {
+    setAmount((prev) => {
+      if (key === "⌫") return prev.slice(0, -1);
+      if (key === "." && prev.includes(".")) return prev;
+      return prev + key;
+    });
+  }
+
+  /** Captures the typed amount, then completes if that clears the balance. */
+  function tender() {
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) return;
+    const next = tillReduce(till, { type: "pay", payment: { method, amount: value } });
+    dispatch({ type: "pay", payment: { method, amount: value } });
+    setAmount("");
+    if (computeTotals(next).balance <= 0) complete(next);
+  }
+
+  function complete(state = till) {
+    const t = computeTotals(state);
+    if (state.lines.length === 0 || t.balance > 0) return;
     addInvoice({
-      clientId: till.clientId,
-      clientName: till.clientName ?? "Walk-in",
-      total: totals.subtotal,
-      lines: till.lines,
-      payments: till.payments,
-      tips: till.tips,
+      clientId: state.clientId,
+      clientName: state.clientName ?? "Walk-in",
+      total: t.subtotal,
+      lines: state.lines,
+      payments: state.payments,
+      tips: state.tips,
       seconds,
     });
-    setToast({ total: totals.subtotal, seconds });
+    setToast({ total: t.subtotal, seconds });
     dispatch({ type: "clear" });
+    setAmount("");
+    setMethod("card");
   }
 
-  // Takings so far = the real demo day plus anything rung up in this session.
   const playTotal = invoices.reduce((sum, i) => sum + i.total, 0);
   const dayTotal = demoday.totals.total + playTotal;
   const dayCount = demoday.invoiceCount + invoices.length;
@@ -96,267 +140,306 @@ export default function TillPage() {
     return staff.filter((s) => ids.has(s.id));
   }, [till.lines]);
 
+  const hasLines = till.lines.length > 0;
+  const changeDue = totals.change > 0;
+
   return (
-    <>
-      <PageHeader
-        eyebrow="Reception"
-        title="Till"
-        subtitle={`${longDate(meta.demoDate)} · ${dayCount} sales · ${zar0(dayTotal)} taken so far`}
-        actions={
-          till.startedAt != null ? (
-            <span
-              className={`tnum rounded-full px-3 py-1 text-sm font-semibold ${
-                seconds <= 30 ? "bg-good-soft text-good" : "bg-warn-soft text-warn"
-              }`}
-            >
-              {seconds}s
-            </span>
-          ) : (
-            <span className="text-xs text-mutedink">Target: a routine sale in under 30 seconds</span>
-          )
-        }
-      />
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Top bar */}
+      <header className="flex shrink-0 flex-wrap items-center gap-4 border-b border-edge bg-white px-6 py-3.5">
+        <GlobalSearch
+          onPickClient={pickClient}
+          onPickService={addService}
+          onPickProduct={addProduct}
+          onQueryChange={setQuery}
+        />
 
-      {toast && (
-        <div
-          role="status"
-          className="mb-4 flex flex-wrap items-center gap-2 rounded border border-good bg-good-soft px-4 py-3 text-sm text-good"
-        >
-          <strong>Sale complete — {zar(toast.total)}.</strong>
-          <span>
-            Rung up in {toast.seconds} second{toast.seconds === 1 ? "" : "s"}
-            {toast.seconds <= 30 ? " — inside the 30-second target." : "."}
-          </span>
+        <div className="ml-auto text-right">
+          <p className="text-[10.5px] uppercase tracking-[0.1em] text-faintink">Taken today</p>
+          <p className="text-ink">
+            <span className="tnum text-[18px] font-semibold">{zar0(dayTotal)}</span>
+            <span className="text-[12px] text-faintink"> · {dayCount} sales</span>
+          </p>
         </div>
-      )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        {/* Left: pick a client, then pick items */}
-        <div className="flex flex-col gap-4">
+        {till.startedAt != null ? (
+          <span
+            className={`flex items-center gap-1.5 rounded-full px-[15px] py-2 text-[13px] font-semibold ${
+              seconds <= 30 ? "bg-good-soft text-good" : "bg-warn-soft text-warn"
+            }`}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+            <span className="tnum">{seconds}s</span>
+          </span>
+        ) : (
+          <span className="text-[12px] text-faintink">
+            Target: a routine sale in under 30 seconds
+          </span>
+        )}
+      </header>
+
+      {/* Working area */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px]">
+        {/* Catalogue */}
+        <div className="flex min-h-0 flex-col gap-3.5 overflow-hidden bg-canvas px-6 py-5">
+          <p className="shrink-0 text-[11px] text-faintink">
+            Prototype — real salon data, demo day {longDate(meta.demoDate)}. Client names and
+            numbers are anonymised.
+          </p>
+
+          {toast && (
+            <div
+              role="status"
+              className="shrink-0 rounded-[10px] border border-good bg-good-soft px-4 py-3 text-[13px] text-good"
+            >
+              <strong>Sale complete — {zar(toast.total)}.</strong> Rung up in {toast.seconds}{" "}
+              second{toast.seconds === 1 ? "" : "s"}
+              {toast.seconds <= 30 ? " — inside the 30-second target." : "."}
+            </div>
+          )}
+
+          <ItemCatalogue onAddService={addService} onAddProduct={addProduct} query={query} />
+
+          {invoices.length > 0 && (
+            <div className="shrink-0 border-t border-edge pt-2.5">
+              <p className="text-[11px] text-faintink">
+                Rung up in this demo: {invoices.length} sale
+                {invoices.length === 1 ? "" : "s"} · {zar0(playTotal)}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Receipt */}
+        <aside className="flex min-h-0 flex-col overflow-y-auto border-t border-edge bg-white lg:border-l lg:border-t-0">
           <ClientPicker
             clientId={till.clientId}
             clientName={till.clientName}
-            onPick={(c) =>
-              dispatch({
-                type: "setClient",
-                clientId: c.id,
-                clientName: c.name || null,
-                at: Date.now(),
-              })
-            }
+            onChange={() => window.dispatchEvent(new Event("hairline:focus-search"))}
+            onClear={hasLines ? clearSale : undefined}
           />
-          <ItemCatalogue onAddService={addService} onAddProduct={addProduct} />
-        </div>
 
-        {/* Right: the running sale */}
-        <aside className="flex h-fit flex-col rounded border border-hairline bg-card lg:sticky lg:top-4">
-          <div className="flex items-center justify-between border-b border-hairline-soft px-4 py-3">
-            <h2 className="text-sm font-semibold text-ink">This sale</h2>
-            {till.lines.length > 0 && (
-              <button
-                type="button"
-                onClick={() => dispatch({ type: "clear" })}
-                className="text-xs text-mutedink underline underline-offset-2 hover:text-crit"
-              >
-                Clear
-              </button>
+          {/* Lines — a floor height so a tall keypad can never squeeze them away */}
+          <div className="min-h-[150px] flex-1 shrink-0 overflow-y-auto py-1.5">
+            {!hasLines ? (
+              <p className="px-4 py-10 text-center text-[14px] text-faintink">
+                Pick a service or product to start.
+              </p>
+            ) : (
+              <ul>
+                {till.lines.map((line) => {
+                  const stylist = getStaff(line.stylistId);
+                  return (
+                    <li key={line.key} className="group px-5 py-3">
+                      <div className="flex items-start gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setEditing(editing === line.key ? null : line.key)}
+                          title="Change the stylist, quantity or discount"
+                          className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg bg-canvas text-[10px] font-bold text-taupe-deep transition-colors hover:bg-chip"
+                        >
+                          {stylist ? initials(stylist.name) : "—"}
+                        </button>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[14px] leading-[1.35] text-ink">{line.descr}</p>
+                          <button
+                            type="button"
+                            onClick={() => setEditing(editing === line.key ? null : line.key)}
+                            className="text-left text-[11.5px] text-faintink hover:text-taupe-deep"
+                          >
+                            {stylist?.name ?? "No stylist"} · Qty {line.qty}
+                            {line.disc > 0 ? ` · ${line.disc}% off` : ""}
+                          </button>
+                        </div>
+
+                        <span className="tnum shrink-0 text-[15px] font-semibold text-ink">
+                          {zar(line.price * line.qty * (1 - line.disc / 100))}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => dispatch({ type: "remove", key: line.key })}
+                          aria-label={`Remove ${line.descr}`}
+                          className="shrink-0 text-faintink opacity-0 transition-opacity hover:text-crit focus-visible:opacity-100 group-hover:opacity-100"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {editing === line.key && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-[10px] bg-canvas px-3 py-2.5">
+                          <label className="flex items-center gap-1.5 text-[11.5px] text-taupe-deep">
+                            Stylist
+                            <select
+                              value={line.stylistId ?? ""}
+                              onChange={(e) =>
+                                dispatch({
+                                  type: "update",
+                                  key: line.key,
+                                  patch: { stylistId: Number(e.target.value) },
+                                })
+                              }
+                              aria-label={`Stylist for ${line.descr}`}
+                              className="rounded border border-edge bg-white px-1.5 py-1 text-[11.5px] text-ink"
+                            >
+                              {staff
+                                .filter((s) => s.role !== "reception")
+                                .map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.name}
+                                  </option>
+                                ))}
+                            </select>
+                          </label>
+
+                          <label className="flex items-center gap-1.5 text-[11.5px] text-taupe-deep">
+                            Qty
+                            <input
+                              type="number"
+                              min={1}
+                              value={line.qty}
+                              onChange={(e) =>
+                                dispatch({
+                                  type: "update",
+                                  key: line.key,
+                                  patch: { qty: Math.max(1, Number(e.target.value) || 1) },
+                                })
+                              }
+                              aria-label={`Quantity for ${line.descr}`}
+                              className="tnum w-14 rounded border border-edge bg-white px-1.5 py-1 text-[11.5px] text-ink"
+                            />
+                          </label>
+
+                          <label className="flex items-center gap-1.5 text-[11.5px] text-taupe-deep">
+                            Disc %
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={line.disc}
+                              onChange={(e) =>
+                                dispatch({
+                                  type: "update",
+                                  key: line.key,
+                                  patch: {
+                                    disc: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                                  },
+                                })
+                              }
+                              aria-label={`Discount for ${line.descr}`}
+                              className="tnum w-14 rounded border border-edge bg-white px-1.5 py-1 text-[11.5px] text-ink"
+                            />
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditing(null)}
+                            className="ml-auto text-[11.5px] font-semibold text-taupe"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
 
-          {till.lines.length === 0 ? (
-            <p className="px-4 py-10 text-center text-sm text-mutedink">
-              Pick a service or product to start.
-            </p>
-          ) : (
-            <ul className="divide-y divide-hairline-soft">
-              {till.lines.map((line) => (
-                <li key={line.key} className="px-4 py-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="min-w-0 flex-1 text-sm text-ink">{line.descr}</p>
-                    <span className="tnum text-sm font-semibold text-ink">
-                      {zar(line.price * line.qty * (1 - line.disc / 100))}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => dispatch({ type: "remove", key: line.key })}
-                      aria-label={`Remove ${line.descr}`}
-                      className="text-mutedink hover:text-crit"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-                    <select
-                      value={line.stylistId ?? ""}
-                      onChange={(e) =>
-                        dispatch({
-                          type: "update",
-                          key: line.key,
-                          patch: { stylistId: Number(e.target.value) },
-                        })
-                      }
-                      aria-label={`Stylist for ${line.descr}`}
-                      className="rounded border border-hairline bg-paper px-1.5 py-1 text-xs text-body"
-                    >
-                      {staff
-                        .filter((s) => s.role !== "reception")
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                    </select>
-                    <label className="flex items-center gap-1 text-mutedink">
-                      Qty
-                      <input
-                        type="number"
-                        min={1}
-                        value={line.qty}
-                        onChange={(e) =>
-                          dispatch({
-                            type: "update",
-                            key: line.key,
-                            patch: { qty: Math.max(1, Number(e.target.value) || 1) },
-                          })
-                        }
-                        aria-label={`Quantity for ${line.descr}`}
-                        className="tnum w-12 rounded border border-hairline bg-paper px-1.5 py-1 text-xs text-body"
-                      />
-                    </label>
-                    <label className="flex items-center gap-1 text-mutedink">
-                      Disc %
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={line.disc}
-                        onChange={(e) =>
-                          dispatch({
-                            type: "update",
-                            key: line.key,
-                            patch: {
-                              disc: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
-                            },
-                          })
-                        }
-                        aria-label={`Discount for ${line.descr}`}
-                        className="tnum w-12 rounded border border-hairline bg-paper px-1.5 py-1 text-xs text-body"
-                      />
-                    </label>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {till.lines.length > 0 && (
+          {hasLines && (
             <>
-              <div className="border-t border-hairline-soft px-4 py-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-mutedink">Subtotal</span>
-                  <span className="tnum font-semibold text-ink">{zar(totals.subtotal)}</span>
-                </div>
-                <div className="mt-1 flex justify-between text-xs text-mutedink">
-                  <span>VAT included (15%)</span>
-                  <span className="tnum">{zar(totals.vat)}</span>
-                </div>
-                {totals.tipTotal > 0 && (
-                  <div className="mt-1 flex justify-between text-xs text-taupe-deep">
-                    <span>Tips (paid to staff, not part of the sale)</span>
-                    <span className="tnum">{zar(totals.tipTotal)}</span>
-                  </div>
-                )}
-              </div>
-
               {tipStylists.length > 0 && (
-                <div className="border-t border-hairline-soft px-4 py-3">
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-mutedink">
+                <div className="border-t border-edge-faint px-5 py-3">
+                  <p className="mb-1.5 text-[10.5px] uppercase tracking-[0.1em] text-faintink">
                     Tip
                   </p>
                   <div className="flex flex-col gap-1.5">
-                    {tipStylists.map((s) => {
-                      const current = till.tips.find((t) => t.stylistId === s.id)?.amount ?? "";
-                      return (
-                        <label key={s.id} className="flex items-center justify-between gap-2 text-xs">
-                          <span className="text-body">{s.name}</span>
-                          <input
-                            type="number"
-                            min={0}
-                            value={current}
-                            placeholder="0"
-                            onChange={(e) =>
-                              dispatch({
-                                type: "tip",
-                                stylistId: s.id,
-                                amount: Number(e.target.value) || 0,
-                              })
-                            }
-                            aria-label={`Tip for ${s.name}`}
-                            className="tnum w-20 rounded border border-hairline bg-paper px-2 py-1 text-xs text-ink"
-                          />
-                        </label>
-                      );
-                    })}
+                    {tipStylists.map((s) => (
+                      <label key={s.id} className="flex items-center justify-between gap-2">
+                        <span className="text-[12.5px] text-body">{s.name}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={till.tips.find((t) => t.stylistId === s.id)?.amount ?? ""}
+                          placeholder="0"
+                          onChange={(e) =>
+                            dispatch({
+                              type: "tip",
+                              stylistId: s.id,
+                              amount: Number(e.target.value) || 0,
+                            })
+                          }
+                          aria-label={`Tip for ${s.name}`}
+                          className="tnum w-20 rounded-lg bg-canvas px-2 py-1 text-right text-[12.5px] text-ink"
+                        />
+                      </label>
+                    ))}
                   </div>
                 </div>
               )}
 
+              {/* Totals — the anchor of the screen */}
+              <div
+                className={`px-5 py-[18px] text-white transition-colors duration-200 ${
+                  changeDue ? "bg-good" : "bg-taupe-deep"
+                }`}
+              >
+                <div className="flex justify-between text-[12.5px] text-[#d8d1c5]">
+                  <span>Subtotal</span>
+                  <span className="tnum">{zar(totals.subtotal)}</span>
+                </div>
+                <div className="mt-1 flex justify-between text-[12.5px] text-[#d8d1c5]">
+                  <span>VAT included (15%)</span>
+                  <span className="tnum">{zar(totals.vat)}</span>
+                </div>
+                {till.payments.map((p, i) => (
+                  <div
+                    key={`${p.method}-${i}`}
+                    className="mt-1 flex justify-between text-[12.5px] text-[#d8d1c5]"
+                  >
+                    <span className="capitalize">
+                      {p.method === "topay" ? "To pay" : p.method} taken
+                    </span>
+                    <span className="tnum">
+                      − {zar(p.amount)}
+                      <button
+                        type="button"
+                        onClick={() => dispatch({ type: "unpay", index: i })}
+                        aria-label={`Remove ${p.method} payment`}
+                        className="ml-2 text-white/60 hover:text-white"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  </div>
+                ))}
+
+                <div className="mt-3 flex items-baseline justify-between border-t border-white/[0.18] pt-3">
+                  <span className="text-[12px] uppercase tracking-[0.12em] text-[#e6e0d4]">
+                    {changeDue ? "Change due" : "Balance"}
+                  </span>
+                  <span className="tnum text-[40px] font-semibold leading-none tracking-[-0.025em]">
+                    {zar(changeDue ? totals.change : totals.balance)}
+                  </span>
+                </div>
+              </div>
+
               <PaymentPanel
                 totals={totals}
-                payments={till.payments}
-                onPay={(p: Payment) => dispatch({ type: "pay", payment: p })}
-                onUnpay={(i) => dispatch({ type: "unpay", index: i })}
+                method={method}
+                onMethod={setMethod}
+                amount={amount}
+                onAmount={setAmount}
+                onKey={pressKey}
+                onTender={tender}
+                onComplete={() => complete()}
               />
-
-              <div className="border-t border-hairline-soft px-4 py-3">
-                {totals.change > 0 && (
-                  <div className="mb-2 flex justify-between rounded bg-good-soft px-3 py-2 text-sm text-good">
-                    <span className="font-semibold">Change due</span>
-                    <span className="tnum font-semibold">{zar(totals.change)}</span>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={complete}
-                  disabled={totals.balance > 0}
-                  className="w-full rounded bg-taupe-deep px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-ink disabled:cursor-not-allowed disabled:bg-hairline disabled:text-mutedink"
-                >
-                  {totals.balance > 0
-                    ? `${zar(totals.balance)} still owing`
-                    : `Complete sale — ${zar(totals.subtotal)}`}
-                </button>
-              </div>
             </>
           )}
         </aside>
       </div>
-
-      {invoices.length > 0 && (
-        <section className="mt-6">
-          <h2 className="mb-2 text-sm font-semibold text-ink">
-            Rung up in this demo{" "}
-            <Badge tone="neutral">
-              {invoices.length} sale{invoices.length === 1 ? "" : "s"} · {zar0(playTotal)}
-            </Badge>
-          </h2>
-          <ul className="flex flex-col gap-1">
-            {invoices.slice(0, 6).map((inv) => (
-              <li
-                key={inv.id}
-                className="flex items-center justify-between rounded border border-hairline bg-card px-3 py-2 text-sm"
-              >
-                <span className="min-w-0 truncate text-body">
-                  {inv.clientName} · {inv.lines.length} item{inv.lines.length === 1 ? "" : "s"}
-                </span>
-                <span className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs text-mutedink">{inv.seconds}s</span>
-                  <span className="tnum font-semibold text-ink">{zar(inv.total)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </>
+    </div>
   );
 }

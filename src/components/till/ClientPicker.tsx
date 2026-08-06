@@ -1,129 +1,111 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { clients, getStaff, meta } from "@/lib/data";
-import { relativeToDemo, zar0 } from "@/lib/format";
-import { Badge } from "@/components/ui";
+import { clients, getStaff } from "@/lib/data";
+import { initials } from "@/lib/format";
 
 interface ClientPickerProps {
   clientId: number | null;
   clientName: string | null;
-  onPick: (client: { id: number | null; name: string }) => void;
+  /** Opens the top-bar search so a client can be chosen. */
+  onChange: () => void;
+  /** Voids the whole sale. Only offered once there is something to void. */
+  onClear?: () => void;
 }
 
-export function ClientPicker({ clientId, clientName, onPick }: ClientPickerProps) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
+/**
+ * The receipt's client header. Keeps a fixed-height slot so the panel does not
+ * reflow the moment a client is picked.
+ */
+export function ClientPicker({
+  clientId,
+  clientName,
+  onChange,
+  onClear,
+}: ClientPickerProps) {
+  const client = clientId != null ? clients.find((c) => c.id === clientId) : undefined;
 
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    const digits = q.replace(/\D/g, "");
-    return clients
-      .filter((c) => {
-        if (c.name.toLowerCase().includes(q)) return true;
-        return digits.length >= 3 && c.tel.replace(/\D/g, "").includes(digits);
-      })
-      .slice(0, 8);
-  }, [query]);
-
-  const selected = clientId != null ? clients.find((c) => c.id === clientId) : undefined;
-
-  if (clientName) {
+  if (!clientName) {
     return (
-      <div className="flex items-start justify-between gap-3 rounded border border-hairline bg-card p-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate font-semibold text-ink">{clientName}</p>
-            {selected?.vip && <Badge tone="accent">VIP</Badge>}
-            {selected?.medical && <Badge tone="crit">Medical</Badge>}
-            {selected?.lapsed && <Badge tone="warn">Lapsed</Badge>}
-          </div>
-          {selected ? (
-            <p className="mt-0.5 text-xs text-mutedink">
-              {selected.visitCount} visits · {zar0(selected.lifetimeSpend)} lifetime · last seen{" "}
-              {relativeToDemo(selected.lastVisit, meta.demoDate)}
-              {selected.prefStylistId
-                ? ` · usually ${getStaff(selected.prefStylistId)?.name ?? "—"}`
-                : ""}
-            </p>
-          ) : (
-            <p className="mt-0.5 text-xs text-mutedink">Walk-in — no client file</p>
-          )}
-          {selected?.medical && (
-            <p className="mt-1.5 rounded bg-crit-soft px-2 py-1 text-xs text-crit">
-              {selected.medical}
-            </p>
-          )}
-        </div>
+      <div className="flex h-[70px] shrink-0 items-center gap-3 border-b border-edge-faint px-5">
         <button
           type="button"
-          onClick={() => {
-            onPick({ id: null, name: "" });
-            setQuery("");
-            setOpen(false);
-          }}
-          className="shrink-0 text-xs text-taupe-deep underline underline-offset-2"
+          onClick={onChange}
+          className="flex-1 rounded-[10px] bg-canvas px-4 py-2.5 text-left text-[14px] text-taupe-deep transition-colors hover:bg-chip"
         >
-          Change
+          Walk-in — pick a client
         </button>
+        {onClear && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="shrink-0 text-[12px] font-semibold text-faintink transition-colors hover:text-crit"
+          >
+            Clear
+          </button>
+        )}
       </div>
     );
   }
 
+  const stylist = getStaff(client?.prefStylistId);
+
   return (
-    <div className="relative">
-      <label className="block">
-        <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-mutedink">
-          Client
+    <div className="shrink-0 border-b border-edge-faint px-5 py-4">
+      <div className="flex items-center gap-[11px]">
+        <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-taupe text-[13px] font-semibold text-white">
+          {initials(clientName)}
         </span>
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          placeholder="Search name or phone…"
-          className="w-full rounded border border-hairline bg-card px-3 py-2.5 text-sm text-ink placeholder:text-mutedink"
-        />
-      </label>
 
-      <button
-        type="button"
-        onClick={() => onPick({ id: null, name: "Walk-in" })}
-        className="mt-2 text-xs text-taupe-deep underline underline-offset-2"
-      >
-        Ring up as walk-in
-      </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="truncate text-[15px] font-semibold text-ink">{clientName}</span>
+            {client?.vip && (
+              <span className="rounded bg-chip px-1.5 py-px text-[10px] font-bold tracking-[0.04em] text-taupe-deep">
+                VIP
+              </span>
+            )}
+            {client?.medical && (
+              <span className="rounded bg-crit-soft px-1.5 py-px text-[10px] font-bold tracking-[0.04em] text-crit">
+                MEDICAL
+              </span>
+            )}
+            {client?.lapsed && (
+              <span className="rounded bg-warn-soft px-1.5 py-px text-[10px] font-bold tracking-[0.04em] text-warn">
+                LAPSED
+              </span>
+            )}
+          </div>
+          <p className="truncate text-[12px] text-faintink">
+            {client
+              ? `${client.visitCount} visits${stylist ? ` · usually ${stylist.name}` : ""}`
+              : "Walk-in — no client file"}
+          </p>
+        </div>
 
-      {open && matches.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded border border-hairline bg-card shadow-lg">
-          {matches.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onPick({ id: c.id, name: c.name });
-                  setQuery("");
-                  setOpen(false);
-                }}
-                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-hairline-soft"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-sm text-ink">{c.name}</span>
-                  <span className="block text-xs text-mutedink">
-                    {c.tel} · {c.visitCount} visits
-                  </span>
-                </span>
-                <span className="shrink-0 text-xs text-mutedink">
-                  {relativeToDemo(c.lastVisit, meta.demoDate)}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <span className="flex shrink-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={onChange}
+            className="text-[12px] font-semibold text-taupe transition-colors hover:text-taupe-deep"
+          >
+            Change
+          </button>
+          {onClear && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="text-[12px] font-semibold text-faintink transition-colors hover:text-crit"
+            >
+              Clear
+            </button>
+          )}
+        </span>
+      </div>
+
+      {client?.medical && (
+        <p className="mt-2 rounded bg-crit-soft px-2.5 py-1.5 text-[11.5px] text-crit">
+          {client.medical}
+        </p>
       )}
     </div>
   );

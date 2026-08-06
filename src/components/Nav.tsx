@@ -20,7 +20,7 @@ const ICONS: Record<string, string> = {
   admin: "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-2.9 1.2v.2a2 2 0 11-4 0v-.1a1.7 1.7 0 00-2.9-1.2l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00-1.2-2.9H3a2 2 0 110-4h.1A1.7 1.7 0 004.3 6l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 002.9-1.2V2a2 2 0 114 0v.1a1.7 1.7 0 002.9 1.2l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 001.2 2.9H22a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z",
 };
 
-function Icon({ path }: { path: string }) {
+function Icon({ path, size = 18 }: { path: string; size?: number }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -29,7 +29,8 @@ function Icon({ path }: { path: string }) {
       strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="h-[18px] w-[18px] shrink-0"
+      className="shrink-0"
+      style={{ width: size, height: size }}
       aria-hidden="true"
     >
       <path d={path} />
@@ -49,32 +50,37 @@ export function Nav() {
 
   return (
     <>
-      {/* Desktop sidebar */}
-      <aside className="no-print hidden md:flex md:w-56 md:shrink-0 md:flex-col md:gap-1 md:border-r md:border-hairline md:bg-card md:px-3 md:py-5">
-        <Link href="/" className="mb-5 px-2 text-2xl">
-          <Wordmark />
+      {/* Desktop icon rail — a counter-friendly 78px instead of a labelled sidebar */}
+      <aside className="no-print hidden w-[78px] shrink-0 flex-col items-center gap-1.5 bg-ink pb-4 pt-[18px] md:flex">
+        <Link
+          href="/"
+          className="mb-4 text-[19px] font-light leading-none text-white"
+          aria-label="Hairline — dashboard"
+        >
+          H<span className="text-taupe">|</span>l
         </Link>
-        <nav className="flex flex-col gap-0.5">
-          {items.map((item) => (
-            <Link
-              key={item.key}
-              href={item.href}
-              aria-current={isActive(item.href) ? "page" : undefined}
-              className={`flex items-center gap-3 rounded px-3 py-2 text-sm transition-colors ${
-                isActive(item.href)
-                  ? "bg-chip font-semibold text-ink"
-                  : "text-body hover:bg-hairline-soft hover:text-ink"
-              }`}
-            >
-              <span className={isActive(item.href) ? "text-taupe-deep" : "text-taupe"}>
-                <Icon path={ICONS[item.key]} />
-              </span>
-              {item.label}
-            </Link>
-          ))}
+
+        <nav className="flex flex-col items-center gap-1.5">
+          {items.map((item) => {
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.key}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={`flex w-[54px] flex-col items-center gap-1 rounded-xl py-[9px] transition-colors ${
+                  active ? "bg-taupe text-white" : "text-railink hover:bg-white/[0.06] hover:text-white"
+                }`}
+              >
+                <Icon path={ICONS[item.key]} size={19} />
+                <span className="text-[9.5px] tracking-[0.02em]">{item.label}</span>
+              </Link>
+            );
+          })}
         </nav>
-        <div className="mt-auto pt-5">
-          <UserCard />
+
+        <div className="mt-auto">
+          <UserCard avatarOnly />
         </div>
       </aside>
 

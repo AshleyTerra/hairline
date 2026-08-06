@@ -11,7 +11,13 @@ const ROLE_LABEL: Record<string, string> = {
   stylist: "Stylist — own day and figures",
 };
 
-export function UserCard({ compact = false }: { compact?: boolean }) {
+export function UserCard({
+  compact = false,
+  avatarOnly = false,
+}: {
+  compact?: boolean;
+  avatarOnly?: boolean;
+}) {
   const { user, stylistId, signOut } = useStore();
   const router = useRouter();
 
@@ -23,6 +29,21 @@ export function UserCard({ compact = false }: { compact?: boolean }) {
   function handleSignOut() {
     signOut();
     router.push("/");
+  }
+
+  // Foot of the dark icon rail: the avatar alone carries the sign-out action.
+  if (avatarOnly) {
+    return (
+      <button
+        type="button"
+        onClick={handleSignOut}
+        title={`Signed in as ${name} — tap to sign out`}
+        aria-label={`Signed in as ${name}. Sign out`}
+        className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-taupe text-[12px] font-semibold text-white transition-opacity hover:opacity-85"
+      >
+        {initials(name)}
+      </button>
+    );
   }
 
   if (compact) {

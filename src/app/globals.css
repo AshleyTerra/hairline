@@ -22,8 +22,20 @@
   --color-crit: #a0433a;
   --color-crit-soft: #f8eae8;
 
-  --font-sans: "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial,
-    sans-serif;
+  /* Counter redesign: warmer neutrals for the till's working surfaces */
+  --color-canvas: #f4f2ee;
+  --color-edge: #e6e1d9;
+  --color-edge-soft: #e9e4dc;
+  --color-edge-faint: #f0ece5;
+  --color-faintink: #a49a8b;
+  --color-railink: #8d8579;
+
+  --font-sans: var(--font-instrument), "Segoe UI", ui-sans-serif, system-ui, -apple-system,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
 }
 
 html,
