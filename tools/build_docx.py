@@ -279,7 +279,8 @@ contents = [
     ["7", "The team", "Staff portfolios and time clock"],
     ["8", "Cash-up", "Counting the drawer and locking the day"],
     ["9", "Pricing", "The menu, margins and the printed price list"],
-    ["10", "On a phone", "What the stylists carry with them"],
+    ["10", "Admin", "Users, permissions, exports and imports"],
+    ["11", "On a phone", "What the stylists carry with them"],
 ]
 table([["", "Screen", "What it covers"]] + contents,
       [Inches(0.4), Inches(1.8), Inches(4.1)])
@@ -551,8 +552,77 @@ callout("This replaces a yearly job.",
 
 page_break()
 
-# ================================================================= 10 phone
-h2("On a phone", "Section 10")
+# ================================================================= 10 admin
+h2("Admin", "Section 10")
+text("Everything that keeps the system tidy: who can sign in, what each role may open, and "
+     "getting data in and out. The owner sees all of it; reception sees the data tabs only.",
+     space_after=8)
+
+h3("Export data")
+text("Eight ready-made exports, each a CSV that opens straight in Excel or Google Sheets. "
+     "Download one, or take the lot in a single click.", space_after=5)
+bullet("Clients, and a separate lapsed-client list for win-back messages.")
+bullet("Sales for the day, line by line, including anything rung up on the till here.")
+bullet("Stock on hand and a what-to-order list grouped by supplier.")
+bullet("The service menu, staff performance and revenue history.")
+
+screenshot("18-admin-export",
+           "The export tab. Row counts are shown so you know what you are about to download.")
+
+h3("Load clients")
+text("For bringing across a list from a spreadsheet — a promotion sign-up sheet, or clients "
+     "from another salon.", space_after=5)
+numbered(1, "so you can see the column names expected.", bold_head="Download the template ")
+numbered(2, "A Name column is required. Phone, Email, Birthday and Notes are used if present, "
+            "and common spellings like Cell or Mobile are recognised.",
+         bold_head="Save your spreadsheet as CSV. ")
+numbered(3, "Every row is checked before anything is added.",
+         bold_head="Choose the file. ")
+numbered(4, "Rows with no name, an impossible phone number or a duplicate are listed and left "
+            "out. Nothing is added until you press the button.",
+         bold_head="Read the summary. ")
+
+screenshot("19-admin-import",
+           "A file being checked: two rows ready, three skipped with the reason for each.")
+
+h3("MySalon backup")
+text("Where a full changeover from the old system would start. Choose the .bak file MySalon "
+     "produces and it is checked on the spot — the file never leaves your computer.",
+     space_after=5)
+bullet("A genuine SQL Server backup is recognised by its file header and reported with its size.")
+bullet("Anything else is rejected with an explanation rather than a silent failure.")
+bullet("The five steps a real restore runs through are set out underneath.")
+
+screenshot("20-admin-restore",
+           "The real 141 MB MySalon backup, recognised and confirmed as valid.")
+
+callout("The restore itself needs a server.",
+        "Checking the file works here in the browser, but restoring 148 MB of SQL Server data "
+        "cannot happen in a web page. In the live system the file is handed to the server, which "
+        "restores it privately, reconciles the totals and reports back. The prototype shows the "
+        "steps rather than pretending to run them.", fill="F7EFE0", colour=WARN)
+
+h3("Users")
+bullet("Add someone with a display name, username, role and password.")
+bullet("Change anyone's role from the list, or reset their password.")
+bullet("Remove a user — except the last owner, so nobody can lock the salon out.")
+
+screenshot("21-admin-users",
+           "The user list. Built-in demo sign-ins sit alongside anyone you add.")
+
+h3("Roles and screens")
+text("A simple grid: tick which screens each role may open. The menu updates the instant you "
+     "change something, so you can see the effect immediately.", space_after=5)
+bullet("Reception, for example, can be given or denied Stock without touching anything else.")
+bullet("The owner's own Admin box is fixed on, so it is impossible to lock yourself out.")
+
+screenshot("22-admin-permissions",
+           "The permissions grid. Owner keeps Admin permanently — that box cannot be unticked.")
+
+page_break()
+
+# ================================================================= 11 phone
+h2("On a phone", "Section 11")
 text("Every screen works on a phone. For stylists that is the whole point: their figures, in "
      "their pocket, without asking anyone.", space_after=8)
 

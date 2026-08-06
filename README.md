@@ -38,9 +38,25 @@ owner can move between roles without being told the passwords.
 | **Team** | Staff portfolios: turnover against target, tips, retail share, time clock. |
 | **Cash-up** | Denomination counter with live variance against expected cash, then lock the day. |
 | **Pricing** | The service menu with margins, a scheduled-increase preview, and a printable client price list generated from live data. |
+| **Admin** | Users and passwords, a role-by-screen permission grid that drives the real menu, eight CSV exports, client import from a spreadsheet, and MySalon `.bak` validation. |
 
 Sales you ring up on the till persist in the browser and feed into the dashboard and
 cash-up, so the demo hangs together as one day of trading.
+
+## What Admin can genuinely do
+
+The prototype is a static site, so each admin job is built to the limit that allows:
+
+| Job | In the prototype |
+|---|---|
+| CSV exports | **Fully working.** Eight exports, real files, correct quoting so phone numbers keep their leading zero. |
+| Client import | **Fully working.** Parses your CSV, validates every row, shows what will be skipped and why, then adds the good rows to the session. |
+| Users and passwords | **Fully working.** Stored in the browser; the sign-in screen authenticates against them. |
+| Roles and screens | **Fully working.** The permission grid is what the menu reads, so changes take effect immediately. |
+| MySalon `.bak` restore | **Validation only.** The file's header is checked in the browser to confirm it is a genuine SQL Server backup, and the migration steps are shown. Restoring 148 MB of SQL Server data needs a server, which a static site does not have. |
+
+Admin changes live in `localStorage`, so they never affect anyone else's demo.
+**Reset the demo** on the Admin screen puts everything back to how a first-time visitor finds it.
 
 ## Privacy
 

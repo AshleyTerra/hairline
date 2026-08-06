@@ -2,18 +2,31 @@
 
 import { useCallback, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import type { PlayInvoice, Role } from "./types";
-import { authenticate, type SignedInUser } from "./auth";
+import { type SignedInUser } from "./auth";
+import {
+  DEFAULT_PERMISSIONS,
+  defaultUsers,
+  type ImportedClient,
+  type ManagedUser,
+  type Permissions,
+} from "./admin";
 
 const INVOICE_KEY = "hairline-demo-invoices";
 const ROLE_KEY = "hairline-demo-role";
 const STYLIST_KEY = "hairline-demo-stylist";
 const USER_KEY = "hairline-demo-user";
+const USERS_KEY = "hairline-demo-users";
+const PERMS_KEY = "hairline-demo-permissions";
+const IMPORTED_KEY = "hairline-demo-imported-clients";
 
 interface DemoState {
   user: SignedInUser | null;
   role: Role;
   stylistId: number;
   invoices: PlayInvoice[];
+  users: ManagedUser[];
+  permissions: Permissions;
+  importedClients: ImportedClient[];
   /** False until the client has read localStorage, so the shell can hold back. */
   hydrated: boolean;
 }
@@ -23,6 +36,9 @@ const SERVER_STATE: DemoState = {
   role: "owner",
   stylistId: 0,
   invoices: [],
+  users: defaultUsers(),
+  permissions: DEFAULT_PERMISSIONS,
+  importedClients: [],
   hydrated: false,
 };
 
@@ -51,6 +67,9 @@ class DemoStore {
         role: user?.role ?? read<Role>(ROLE_KEY, SERVER_STATE.role),
         stylistId: user?.staffId ?? read<number>(STYLIST_KEY, SERVER_STATE.stylistId),
         invoices: read<PlayInvoice[]>(INVOICE_KEY, []),
+        users: read<ManagedUser[]>(USERS_KEY, defaultUsers()),
+        permissions: read<Permissions>(PERMS_KEY, DEFAULT_PERMISSIONS),
+        importedClients: read<ImportedClient[]>(IMPORTED_KEY, []),
         hydrated: true,
       };
     }
@@ -66,8 +85,15 @@ class DemoStore {
 
   /** Returns true when the credentials matched and the session started. */
   signIn(username: string, password: string): boolean {
-    const user = authenticate(username, password);
-    if (!user) return false;
+    const name = String(username ?? "").trim().toLowerCase();
+    const account = this.getSnapshot().users.find((u) => u.username === name);
+    if (!name || !password || !account || account.password !== password) return false;
+    const user: SignedInUser = {
+      username: account.username,
+      role: account.role,
+      staffId: account.staffId,
+      displayName: account.displayName,
+    };
     write(USER_KEY, user);
     this.set({
       user,
@@ -103,6 +129,41 @@ class DemoStore {
   clearInvoices() {
     write(INVOICE_KEY, []);
     this.set({ invoices: [] });
+  }
+
+  setUsers(users: ManagedUser[]) {
+    write(USERS_KEY, users);
+    this.set({ users });
+  }
+
+  setPermissions(permissions: Permissions) {
+    write(PERMS_KEY, permissions);
+    this.set({ permissions });
+  }
+
+  addImportedClients(clients: ImportedClient[]) {
+    const importedClients = [...this.getSnapshot().importedClients, ...clients];
+    write(IMPORTED_KEY, importedClients);
+    this.set({ importedClients });
+  }
+
+  clearImportedClients() {
+    write(IMPORTED_KEY, []);
+    this.set({ importedClients: [] });
+  }
+
+  /** Returns the demo to the state a first-time visitor sees. */
+  resetDemo() {
+    write(INVOICE_KEY, []);
+    write(USERS_KEY, defaultUsers());
+    write(PERMS_KEY, DEFAULT_PERMISSIONS);
+    write(IMPORTED_KEY, []);
+    this.set({
+      invoices: [],
+      users: defaultUsers(),
+      permissions: DEFAULT_PERMISSIONS,
+      importedClients: [],
+    });
   }
 }
 
@@ -156,6 +217,14 @@ export function useStore() {
     []
   );
   const signOut = useCallback(() => store.signOut(), []);
+  const setUsers = useCallback((users: ManagedUser[]) => store.setUsers(users), []);
+  const setPermissions = useCallback((p: Permissions) => store.setPermissions(p), []);
+  const addImportedClients = useCallback(
+    (clients: ImportedClient[]) => store.addImportedClients(clients),
+    []
+  );
+  const clearImportedClients = useCallback(() => store.clearImportedClients(), []);
+  const resetDemo = useCallback(() => store.resetDemo(), []);
 
   return useMemo(
     () => ({
@@ -163,6 +232,9 @@ export function useStore() {
       role: state.role,
       stylistId: state.stylistId,
       invoices: state.invoices,
+      users: state.users,
+      permissions: state.permissions,
+      importedClients: state.importedClients,
       hydrated: state.hydrated,
       signIn,
       signOut,
@@ -170,7 +242,13 @@ export function useStore() {
       setStylistId,
       addInvoice,
       clearInvoices,
+      setUsers,
+      setPermissions,
+      addImportedClients,
+      clearImportedClients,
+      resetDemo,
     }),
-    [state, signIn, signOut, setRole, setStylistId, addInvoice, clearInvoices]
+    [state, signIn, signOut, setRole, setStylistId, addInvoice, clearInvoices, setUsers,
+     setPermissions, addImportedClients, clearImportedClients, resetDemo]
   );
 }
