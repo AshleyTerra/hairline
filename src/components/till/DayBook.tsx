@@ -146,6 +146,8 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
   }, [allRows, client, stylistId]);
 
   const takings = rows.reduce((sum, r) => sum + r.v, 0);
+  /** Money sitting on unsettled dockets, kept apart from the day's takings. */
+  const pending = dockets.reduce((sum, d) => sum + docketTotal(d), 0);
   const spanDays = new Set(rows.map((r) => r.d)).size;
   const filtered = rows.length !== allRows.length;
 
@@ -315,8 +317,9 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
         {/* Open dockets first — these still need settling */}
         {isToday && dockets.length > 0 && (
           <div className="border-b border-edge">
-            <p className="bg-warn-soft px-4 py-1.5 text-[10.5px] uppercase tracking-[0.1em] text-warn">
-              Still open · {dockets.length}
+            <p className="flex items-center justify-between bg-warn-soft px-4 py-1.5 text-[10.5px] uppercase tracking-[0.1em] text-warn">
+              <span>Awaiting payment · {dockets.length}</span>
+              {pending > 0 && <span className="tnum">{zar0(pending)}</span>}
             </p>
             <ul data-open-dockets>
               {dockets.map((d) => (
@@ -340,8 +343,12 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
                     <span className="tnum w-20 shrink-0 text-right text-[13.5px] font-semibold text-ink">
                       {docketTotal(d) > 0 ? zar(docketTotal(d)) : "—"}
                     </span>
-                    <span className="w-16 shrink-0 text-right text-[11px] font-semibold text-warn">
-                      {d.number === activeNumber ? "on screen" : "open"}
+                    <span className="w-20 shrink-0 text-right text-[11px] font-semibold text-warn">
+                      {d.number === activeNumber
+                        ? "on screen"
+                        : d.state.lines.length > 0
+                          ? "to pay"
+                          : "empty"}
                     </span>
                   </button>
                 </li>

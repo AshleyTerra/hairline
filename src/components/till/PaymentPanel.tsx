@@ -26,6 +26,8 @@ interface PaymentPanelProps {
   onKey: (key: string) => void;
   onTender: () => void;
   onComplete: () => void;
+  /** Parks the sale on the client's docket, awaiting payment. */
+  onSave?: () => void;
 }
 
 /**
@@ -41,6 +43,7 @@ export function PaymentPanel({
   onKey,
   onTender,
   onComplete,
+  onSave,
 }: PaymentPanelProps) {
   const owing = totals.balance > 0;
 
@@ -116,22 +119,41 @@ export function PaymentPanel({
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={owing ? onTender : onComplete}
-        disabled={owing && !amount}
-        className={`w-full rounded-[11px] py-[17px] text-center text-[15px] font-semibold transition-colors ${
-          owing && !amount
-            ? "cursor-not-allowed bg-hairline text-mutedink"
-            : "bg-ink text-white hover:bg-black"
-        }`}
-      >
-        {owing
-          ? amount
-            ? `Take R ${amount} & complete`
-            : `${zar(totals.balance)} still owing`
-          : `Complete sale — ${zar(totals.subtotal)}`}
-      </button>
+      <div className="flex gap-2">
+        {onSave && (
+          <button
+            type="button"
+            onClick={onSave}
+            title="Put this on the client's docket to settle later"
+            className="shrink-0 rounded-[11px] border border-edge bg-white px-5 py-[17px] text-[15px] font-semibold text-taupe-deep transition-colors hover:border-taupe hover:bg-chip"
+          >
+            Save
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={owing ? onTender : onComplete}
+          disabled={owing && !amount}
+          className={`flex-1 rounded-[11px] py-[17px] text-center text-[15px] font-semibold transition-colors ${
+            owing && !amount
+              ? "cursor-not-allowed bg-hairline text-mutedink"
+              : "bg-ink text-white hover:bg-black"
+          }`}
+        >
+          {owing
+            ? amount
+              ? `Take R ${amount} & complete`
+              : `${zar(totals.balance)} still owing`
+            : `Complete sale — ${zar(totals.subtotal)}`}
+        </button>
+      </div>
+
+      {onSave && (
+        <p className="mt-2 text-center text-[11px] text-faintink">
+          Save keeps it under Clients today, awaiting payment.
+        </p>
+      )}
     </div>
   );
 }

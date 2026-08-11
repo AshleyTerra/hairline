@@ -26,6 +26,9 @@ export default function TillPage() {
   const [docketNo, setDocketNo] = useState<number | null>(null);
   const [addingClient, setAddingClient] = useState(false);
   const [slip, setSlip] = useState<InvoiceSlipData | null>(null);
+  const [saved, setSaved] = useState<{ number: number; owing: number; client: string } | null>(
+    null
+  );
   const [now, setNow] = useState(() => Date.now());
   const [toast, setToast] = useState<{ total: number; seconds: number } | null>(null);
   const [query, setQuery] = useState("");
@@ -47,6 +50,12 @@ export default function TillPage() {
     const id = window.setTimeout(() => setToast(null), 6000);
     return () => window.clearTimeout(id);
   }, [toast]);
+
+  useEffect(() => {
+    if (!saved) return;
+    const id = window.setTimeout(() => setSaved(null), 6000);
+    return () => window.clearTimeout(id);
+  }, [saved]);
 
   // Park whatever is on screen against the open docket, so switching between
   // clients never loses work.
@@ -126,6 +135,37 @@ export default function TillPage() {
     setDocketNo(docket.number);
     dispatch({ type: "clear" });
     setAmount("");
+  }
+
+  /**
+   * Puts the sale on the client's docket to settle later, and frees the counter
+   * for the next person. It shows under Clients today, awaiting payment.
+   */
+  function saveForLater() {
+    if (till.lines.length === 0) return;
+
+    let next = dockets;
+    let number = docketNo;
+    if (number == null) {
+      const opened = openDocket(
+        dockets,
+        till,
+        meta.lastInvoiceNumber,
+        new Date().toISOString()
+      );
+      next = opened.dockets;
+      number = opened.docket.number;
+    } else {
+      next = saveDocket(dockets, number, till);
+    }
+
+    setDockets(next);
+    setDocketNo(null);
+    dispatch({ type: "clear" });
+    setAmount("");
+    setMethod("card");
+    setEditing(null);
+    setSaved({ number, owing: totals.balance, client: till.clientName ?? "Walk-in" });
   }
 
   /** Brings a parked docket back to the counter. */
@@ -253,6 +293,18 @@ export default function TillPage() {
             Prototype — real salon data, demo day {longDate(meta.demoDate)}. Client names and
             numbers are anonymised.
           </p>
+
+          {saved && (
+            <div
+              role="status"
+              className="shrink-0 rounded-[10px] border border-warn bg-warn-soft px-4 py-3 text-[13px] text-warn"
+            >
+              <strong>
+                Saved — {saved.client}, docket #{saved.number}.
+              </strong>{" "}
+              {zar(saved.owing)} awaiting payment under Clients today.
+            </div>
+          )}
 
           {toast && (
             <div
@@ -509,6 +561,7 @@ export default function TillPage() {
                 onKey={pressKey}
                 onTender={tender}
                 onComplete={() => complete()}
+                onSave={saveForLater}
               />
             </>
           )}
