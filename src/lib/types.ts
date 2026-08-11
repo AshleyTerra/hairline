@@ -240,6 +240,30 @@ export interface TillTotals {
 }
 
 /** A client captured at the till during the demo. */
+/** One paid invoice as it appears in the day book. Keys are short to keep the file small. */
+export interface DayBookEntry {
+  /** Invoice number. */
+  n: number;
+  /** Date, YYYY-MM-DD. */
+  d: string;
+  /** Time, HH:MM. */
+  t: string;
+  /** Client name. */
+  c: string;
+  /** Stylist id. */
+  s: number;
+  /** Invoice total. */
+  v: number;
+  /** Number of items. */
+  i: number;
+}
+
+export interface DayBook {
+  from: string;
+  to: string;
+  days: Record<string, DayBookEntry[]>;
+}
+
 export interface NewClient {
   /** Negative, to stay clear of the migrated client file. */
   id: number;

@@ -10,16 +10,26 @@ interface ItemCatalogueProps {
   onAddProduct: (product: Product) => void;
   /** Text typed into the top bar, which filters both tabs. */
   query?: string;
+  /** The clients-for-the-day tab, rendered by the parent. */
+  clientsTab?: React.ReactNode;
+  /** How many dockets are still open, shown on the tab. */
+  openDockets?: number;
 }
 
-type Tab = "services" | "retail";
+type Tab = "services" | "retail" | "clients";
 
 /**
  * Services and retail as scannable lists, ordered by how often each item is
  * actually rung up. Reception asked for lists rather than tiles: roughly twice
  * as many items fit on screen, and the ones they reach for are at the top.
  */
-export function ItemCatalogue({ onAddService, onAddProduct, query = "" }: ItemCatalogueProps) {
+export function ItemCatalogue({
+  onAddService,
+  onAddProduct,
+  query = "",
+  clientsTab,
+  openDockets = 0,
+}: ItemCatalogueProps) {
   const [tab, setTab] = useState<Tab>("services");
   const [dept, setDept] = useState<string>(serviceDepts[0] ?? "");
   const [vendor, setVendor] = useState<string>(tillVendors[0] ?? "");
@@ -59,7 +69,7 @@ export function ItemCatalogue({ onAddService, onAddProduct, query = "" }: ItemCa
       {/* Services / Retail, then the tabs that belong to whichever is showing */}
       <div className="flex shrink-0 flex-wrap items-center gap-1.5">
         <div className="mr-1 flex gap-1">
-          {(["services", "retail"] as Tab[]).map((t) => (
+          {(["services", "retail", "clients"] as Tab[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -69,12 +79,18 @@ export function ItemCatalogue({ onAddService, onAddProduct, query = "" }: ItemCa
                 tab === t ? "bg-white text-ink shadow-sm" : "bg-canvas text-taupe-deep hover:bg-chip"
               }`}
             >
-              {t}
+              {t === "clients" ? "Clients today" : t}
+              {t === "clients" && openDockets > 0 && (
+                <span className="tnum ml-1.5 rounded-full bg-warn-soft px-1.5 py-0.5 text-[10.5px] text-warn">
+                  {openDockets}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        {!q &&
+        {tab !== "clients" &&
+          !q &&
           (tab === "services" ? serviceDepts : tillVendors).map((name) => {
             const active = tab === "services" ? dept === name : vendor === name;
             return (
@@ -95,7 +111,10 @@ export function ItemCatalogue({ onAddService, onAddProduct, query = "" }: ItemCa
           })}
       </div>
 
-      {/* The list. Two columns where there is room, so more of it is visible. */}
+      {tab === "clients" ? (
+        clientsTab
+      ) : (
+      /* The list. Two columns where there is room, so more of it is visible. */
       <div className="min-h-0 flex-1 overflow-y-auto rounded-[10px] border border-edge-soft bg-white">
         {empty ? (
           <p className="px-4 py-10 text-center text-[14px] text-faintink">
@@ -147,6 +166,7 @@ export function ItemCatalogue({ onAddService, onAddProduct, query = "" }: ItemCa
           </ul>
         )}
       </div>
+      )}
     </div>
   );
 }

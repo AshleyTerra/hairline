@@ -630,6 +630,50 @@ const analytics = {
 // The salon's highest invoice number so far: new dockets carry on from here.
 const lastInvoiceNumber = rawInvoices.reduce((max, i) => Math.max(max, num(i.id)), 0);
 
+// ------------------------------------------------------------------ day book
+/**
+ * Who came in on any given day, so reception can pick a date — or a range —
+ * instead of only ever seeing today. Built from the real invoice history and
+ * capped to keep the download reasonable.
+ */
+const DAYBOOK_DAYS = 180;
+
+const daybookFrom = (() => {
+  const d = new Date(`${DEMO_DATE}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - DAYBOOK_DAYS);
+  return d.toISOString().slice(0, 10);
+})();
+
+const invoiceIndex = new Map();
+for (const row of rawInvoices) {
+  const stamp = String(row.date ?? "");
+  const day = stamp.slice(0, 10);
+  if (!day || day < daybookFrom || day > DEMO_DATE) continue;
+
+  let inv = invoiceIndex.get(row.id);
+  if (!inv) {
+    inv = {
+      n: num(row.id),
+      d: day,
+      t: stamp.slice(11, 16),
+      c: pseudonym(num(row.clientId)).name,
+      s: num(row.stylistId),
+      v: money(row.total),
+      i: 0,
+    };
+    invoiceIndex.set(row.id, inv);
+  }
+  inv.i += 1;
+}
+
+const daybook = {};
+for (const inv of invoiceIndex.values()) {
+  (daybook[inv.d] ??= []).push(inv);
+}
+for (const day of Object.keys(daybook)) {
+  daybook[day].sort((a, b) => a.t.localeCompare(b.t));
+}
+
 const meta = {
   lastInvoiceNumber,
   company: rawMeta.companyName || "Hairline",
@@ -712,6 +756,7 @@ const files = {
   "clients.json": clientSummaries,
   "demoday.json": demoday,
   "analytics.json": analytics,
+  "daybook.json": { from: daybookFrom, to: DEMO_DATE, days: daybook },
 };
 
 for (const [name, data] of Object.entries(files)) {

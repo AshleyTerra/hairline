@@ -5,10 +5,12 @@ import productsJson from "@/data/products.json";
 import clientsJson from "@/data/clients.json";
 import demodayJson from "@/data/demoday.json";
 import analyticsJson from "@/data/analytics.json";
+import daybookJson from "@/data/daybook.json";
 
 import type {
   Analytics,
   Client,
+  DayBook,
   DemoDay,
   Meta,
   ProductData,
@@ -24,6 +26,7 @@ export const products = productsJson as ProductData;
 export const clients = clientsJson as Client[];
 export const demoday = demodayJson as DemoDay;
 export const analytics = analyticsJson as Analytics;
+export const daybook = daybookJson as DayBook;
 
 // ------------------------------------------------------------------ indexes
 

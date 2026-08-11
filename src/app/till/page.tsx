@@ -5,6 +5,7 @@ import { ClientPicker } from "@/components/till/ClientPicker";
 import { ItemCatalogue } from "@/components/till/ItemCatalogue";
 import { TipPanel } from "@/components/till/TipPanel";
 import { DocketBar } from "@/components/till/DocketBar";
+import { DayBook } from "@/components/till/DayBook";
 import { NewClientDialog } from "@/components/till/NewClientDialog";
 import { InvoiceSlip, type InvoiceSlipData } from "@/components/till/InvoiceSlip";
 import { closeDocket, findDocket, nextNumber, openDocket, saveDocket } from "@/lib/dockets";
@@ -264,14 +265,30 @@ export default function TillPage() {
             </div>
           )}
 
-          <DocketBar
-            dockets={dockets}
-            activeNumber={docketNo}
-            onOpen={openExisting}
-            onNew={newDocket}
-          />
+          {/* A slim reminder of what is still open, whichever tab is showing */}
+          {dockets.length > 0 && (
+            <DocketBar
+              dockets={dockets}
+              activeNumber={docketNo}
+              onOpen={openExisting}
+              onNew={newDocket}
+            />
+          )}
 
-          <ItemCatalogue onAddService={addService} onAddProduct={addProduct} query={query} />
+          <ItemCatalogue
+            onAddService={addService}
+            onAddProduct={addProduct}
+            query={query}
+            openDockets={dockets.length}
+            clientsTab={
+              <DayBook
+                dockets={dockets}
+                activeNumber={docketNo}
+                onOpenDocket={openExisting}
+                onNewDocket={newDocket}
+              />
+            }
+          />
 
           {invoices.length > 0 && (
             <div className="shrink-0 border-t border-edge pt-2.5">
