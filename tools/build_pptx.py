@@ -458,9 +458,9 @@ picture(s, "05-till-payment", M, Inches(2.5), Inches(7.3))
 
 bullets(s, Inches(8.7), Inches(2.6), Inches(3.8), [
     "**One search** finds a client, a service or a scanned barcode.",
-    "**Big tappable tiles** — laid out for a counter, not a desk.",
-    "**The balance owing** is the largest thing on screen, with a keypad beneath it.",
-    "**A live timer** keeps the 30-second target honest.",
+    "**Ordered by what you sell** — the everyday services sit at the top.",
+    "**A docket per client,** opened on arrival, settled at the counter.",
+    "**The balance owing** is the largest thing on screen, keypad beneath it.",
 ], size=12, gap=11)
 
 card(s, Inches(8.7), Inches(5.3), Inches(3.8), Inches(1.35), fill=CHIP, border=CHIP)

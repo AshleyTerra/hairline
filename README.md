@@ -40,6 +40,20 @@ owner can move between roles without being told the passwords.
 | **Pricing** | The service menu with margins, a scheduled-increase preview, and a printable client price list generated from live data. |
 | **Admin** | Users and passwords, a role-by-screen permission grid that drives the real menu, eight CSV exports, client import from a spreadsheet, and MySalon `.bak` validation. |
 
+## Built from reception's feedback
+
+The till follows what the admin user asked for after trying the first build, not a design mock:
+
+| Asked for | Built |
+|---|---|
+| Services and retail in **list format**, most popular first, no durations | Lists ordered by how often each item was rung up in the last 13 months — `Cut - ladies` (818×) leads its department |
+| Retail **tabs per vendor** | A tab per supplier, busiest first, products most-sold first inside each |
+| Tips: **dropdown per operator**, added to the balance but not to stylist sales | Any operator can be tipped, assistants included; the tip raises what the client pays and is reported apart from turnover |
+| A **docket per client**, loadable in advance | Several dockets open at once, each taking an invoice number on creation |
+| **Invoice numbers** and **printable invoices** | Numbering carries on from the salon's sequence (93711 onward); the invoice carries salon, VAT, client, lines, stylist, tip and payment |
+| **Add a new client** at the till | Captured mid-sale from the client slot |
+| Rename to **Price Menu**, split service / retail / menu | Three tabs, with per-supplier retail pricing and scheduled increases on either |
+
 Sales you ring up on the till persist in the browser and feed into the dashboard and
 cash-up, so the demo hangs together as one day of trading.
 

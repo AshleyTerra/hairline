@@ -272,13 +272,13 @@ text("Every screen in the prototype, in the order you will meet it.", colour=MUT
 contents = [
     ["1", "Signing in", "Who gets in, and what each person sees"],
     ["2", "The dashboard", "The business at a glance"],
-    ["3", "The till", "Ringing up a sale in under 30 seconds"],
+    ["3", "The till", "Dockets, ringing up a sale, tips and the printed invoice"],
     ["4", "Clients", "Finding a client and reading their history"],
     ["5", "The diary", "The day, stylist by stylist"],
     ["6", "Stock", "Retail, back bar and what to order"],
     ["7", "The team", "Staff portfolios and time clock"],
     ["8", "Cash-up", "Counting the drawer and locking the day"],
-    ["9", "Pricing", "The menu, margins and the printed price list"],
+    ["9", "Price menu", "Service and retail pricing, and the printed client menu"],
     ["10", "Admin", "Users, permissions, exports and imports"],
     ["11", "On a phone", "What the stylists carry with them"],
 ]
@@ -362,11 +362,25 @@ text("It is laid out like a point of sale rather than a form: a narrow icon rail
      "left, one search box across the top, big tappable tiles in the middle, and the money "
      "on the right.", space_after=6)
 
+h3("Opening a docket for each client")
+text("On a busy day reception opens a docket per client as they arrive — often before the work "
+     "starts — adds to it through the visit, and settles it at the counter. Several stay open "
+     "at once.", space_after=5)
+numbered(1, "The docket takes the next invoice number straight away, carrying on from the "
+            "salon's existing sequence.", bold_head="Press + New docket. ")
+numbered(2, "Add services and products as they happen. Everything is kept against that docket.")
+numbered(3, "Switch between clients by tapping their docket. Nothing is lost.")
+numbered(4, "Settle it at the counter; the docket closes and its number becomes the invoice "
+            "number.")
+
+screenshot("23-till-dockets",
+           "Two dockets open at once, each with its own invoice number and running total.")
+
 h3("Ringing up a sale")
 numbered(1, "at the top. It searches clients, services and products at once, and a scanned "
             "barcode drops straight into the sale.", bold_head="Type into the one search box ")
-numbered(2, "Tiles are grouped by department, biggest and most-used first. Each tap adds a "
-            "line to the receipt on the right.", bold_head="Or tap a tile. ")
+numbered(2, "Services are listed most-used first, so the everyday ones sit at the top. Each tap "
+            "adds a line to the receipt on the right.", bold_head="Or pick from the list. ")
 numbered(3, "to change the stylist, the quantity or a discount.",
          bold_head="Tap the line on the receipt ")
 numbered(4, "if the client leaves one — recorded against the stylist and kept out of the sale "
@@ -377,11 +391,48 @@ numbered(6, "It takes the amount you typed and finishes the sale if that clears 
          bold_head="Press the big dark button. ")
 
 screenshot("03-till-empty",
-           "The till before a sale starts. One search box, and the service menu as tiles.")
+           "The till before a sale starts. One search box, and services listed most-used first.")
 
 screenshot("05-till-payment",
            "A sale in progress. The balance owing is the largest thing on screen, with the "
-           "keypad directly beneath it and the timer reading 4 seconds.")
+           "keypad directly beneath it and the timer running.")
+
+h3("Retail")
+text("Retail is a tab beside Services, with its own tab per supplier — the way the retail wall "
+     "is actually arranged.", space_after=5)
+bullet("Products within each supplier are listed most-sold first.")
+bullet("Stock on hand shows under each product, so you know before you promise.")
+bullet("A scanned barcode adds the product straight away, whichever tab is showing.")
+
+screenshot("27-till-retail",
+           "Retail, with a tab for each supplier. Schwarzkopf, the busiest, leads.")
+
+h3("Tips")
+text("A tip is added to what the client pays, so it goes through on the card and cannot be "
+     "forgotten — but it is kept out of the stylist's sales figure, because a tip is not "
+     "turnover and would otherwise inflate targets and commission.", space_after=5)
+bullet("Choose the operator from a dropdown: anyone can be tipped, including the assistants.")
+bullet("Several people can be tipped on one sale.")
+bullet("The tip shows as its own line on the bill and on the printed invoice.")
+
+screenshot("28-tip",
+           "A R50 tip to an assistant: the subtotal stays R600, the balance becomes R650.")
+
+h3("A client who is not on file")
+text("Press + New beside the client slot to capture a walk-in on the spot — a name is enough, "
+     "with phone, email and notes optional. The sale then lands on a real client file instead "
+     "of disappearing as an anonymous walk-in.", space_after=5)
+
+screenshot("25-new-client",
+           "Capturing a new client at the counter, mid-sale.")
+
+h3("The printed invoice")
+text("Completing a sale offers a proper invoice: the salon's name, address, phone and VAT "
+     "number, the client, every line with the stylist who did it, the tip, the total and how "
+     "it was paid — under its own invoice number.", space_after=5)
+
+screenshot("24-invoice-slip",
+           "The invoice for docket #93711. Print it, or save it as a PDF.")
 
 h3("Things worth knowing")
 bullet("counts from the moment you start the sale, so the 30-second target is visible rather "
@@ -533,22 +584,37 @@ callout("This particular Saturday took no cash at all.",
 page_break()
 
 # ================================================================= 9 pricing
-h2("Pricing", "Section 9")
-text("One place where every price lives, and the source of the printed menu clients see.",
-     space_after=8)
+h2("Price menu", "Section 9")
+text("One place where every price lives, in three tabs.", space_after=6)
 
-bullet("Services are grouped by department with duration, cost, price and margin side by side.")
-bullet("previews a percentage rise before anything is committed.",
-       bold_head="Schedule an increase ")
-bullet("produces a clean, printable menu built from these exact prices.",
-       bold_head="Print client menu ")
+h3("Service pricing")
+bullet("Grouped by department, with cost, price and margin side by side.")
+bullet("A “rung up” column shows how often each service is actually sold, so you can see which "
+       "prices matter most before changing them.")
 
 screenshot("14-pricing",
-           "The price manager. Margins are shown wherever a service cost has been captured.")
+           "Service pricing. Margins show wherever a service cost has been captured.")
+
+h3("Retail pricing")
+bullet("A tab per supplier, matching how the retail wall and the supplier price lists work.")
+bullet("Cost, selling price, margin and stock on hand together on one row.")
+bullet("Increases can be scheduled per supplier, not just across everything at once.")
+
+screenshot("26-retail-pricing",
+           "Retail pricing, one tab per supplier, with margin and stock alongside.")
+
+h3("Client menu")
+bullet("The printable menu clients see, generated from the same prices the till charges.")
+bullet("It can never drift from what is actually charged, because there is only one set of "
+       "prices.")
 
 screenshot("15-price-menu",
-           "The client menu, generated from the same prices the till charges — ready to print "
-           "or save as a PDF.")
+           "The client menu — ready to print or save as a PDF.")
+
+h3("Scheduling an increase")
+text("From either pricing tab, choose a percentage and a date and see exactly what the new "
+     "prices would be, rounded to the nearest R5, before committing to anything.",
+     space_after=5)
 
 callout("This replaces a yearly job.",
         "Hairline currently rebuilds the client price menu as a separate Word document every "

@@ -133,7 +133,7 @@ await sleep(900);
 // Add two catalogue items.
 await evaluate(`
   (() => {
-    const buttons = Array.from(document.querySelectorAll('button')).filter(b => b.className.includes('min-h-[72px]'));
+    const buttons = Array.from(document.querySelectorAll('button')).filter(b => b.closest('[data-catalogue]'));
     if (buttons[2]) buttons[2].click();
     return buttons.length;
   })()
@@ -141,7 +141,7 @@ await evaluate(`
 await sleep(700);
 await evaluate(`
   (() => {
-    const buttons = Array.from(document.querySelectorAll('button')).filter(b => b.className.includes('min-h-[72px]'));
+    const buttons = Array.from(document.querySelectorAll('button')).filter(b => b.closest('[data-catalogue]'));
     if (buttons[5]) buttons[5].click();
     return buttons.length;
   })()
@@ -231,7 +231,7 @@ await shot("14-pricing");
 // The generated, printable client menu.
 await evaluate(`
   (() => {
-    const b = Array.from(document.querySelectorAll('button')).find(x => (x.textContent||'').includes('Print client menu'));
+    const b = Array.from(document.querySelectorAll('button')).find(x => (x.textContent||'').trim() === 'Client menu');
     if (b) b.click();
     return !!b;
   })()
