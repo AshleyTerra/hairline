@@ -1,4 +1,4 @@
-/** Checks the Clients-today tab: date picking, ranges, and open dockets. */
+﻿/** Checks the Clients-today tab: date picking, ranges, and open dockets. */
 import { spawn } from "node:child_process";
 import { rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -59,7 +59,7 @@ const setDate = (label, v) => ev(`(() => {
 const rowCount = () => ev(`document.querySelectorAll('[data-daybook] li').length`);
 
 const results = [];
-const check = (l, p, x = "") => results.push(`${p ? "PASS" : "FAIL"}  ${l}${x ? " — " + x : ""}`);
+const check = (l, p, x = "") => results.push(`${p ? "PASS" : "FAIL"}  ${l}${x ? " - " + x : ""}`);
 
 await send("Page.enable");
 await send("Runtime.enable");
@@ -84,7 +84,7 @@ check("defaults to the demo day", today === "2026-07-25", today);
 
 const todayRows = await rowCount();
 check("lists the day's clients", todayRows >= 30, `${todayRows} rows`);
-const header = await ev(`document.body.innerText.match(/\\d+ clients? ·[^\\n]*/)?.[0]`);
+const header = await ev(`document.body.innerText.match(/\\d+ clients?[^\\n]*R[^\\n]*/)?.[0]`);
 check("shows a client count and takings", !!header, header);
 await shot("d1-today");
 
@@ -131,6 +131,71 @@ const badge = await ev(`
 check("tab badges the open count", /1/.test(badge ?? ""), badge);
 await shot("d4-open-docket");
 
+
+// --- Filters and docket view ---------------------------------------------
+await clickExact("Back to today");
+await sleep(1400);
+const before = await rowCount();
+
+// Client filter
+await ev(`(() => {
+  const el = document.querySelector('input[aria-label="Filter by client"]');
+  const d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
+  d.call(el, 'a'); el.dispatchEvent(new Event('input',{bubbles:true})); return true;
+})()`);
+await sleep(1200);
+const afterClient = await rowCount();
+check("client filter narrows the list", afterClient > 0 && afterClient < before, `${before} -> ${afterClient}`);
+const counter = await ev(`document.body.innerText.match(/\\d+ clients? of \\d+/)?.[0]`);
+check("shows filtered-of-total", !!counter, counter);
+check("offers Clear filters", await ev(`document.body.innerText.includes('Clear filters')`));
+await ev(`(() => {
+  const el = document.querySelector('input[aria-label="Filter by client"]');
+  const d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
+  d.call(el, ''); el.dispatchEvent(new Event('input',{bubbles:true})); return true;
+})()`);
+await sleep(900);
+
+// Stylist filter
+const opts = await ev(`document.querySelector('select[aria-label="Filter by stylist"]')?.options.length`);
+check("stylist filter lists the day's stylists", (opts ?? 0) > 2, `${opts} options`);
+await ev(`(() => {
+  const sel = document.querySelector('select[aria-label="Filter by stylist"]');
+  sel.value = sel.options[1].value;
+  sel.dispatchEvent(new Event('change',{bubbles:true}));
+  return sel.options[1].textContent;
+})()`);
+await sleep(1300);
+const afterStylist = await rowCount();
+check("stylist filter narrows the list", afterStylist > 0 && afterStylist < before, `${before} -> ${afterStylist}`);
+const names = await ev(`Array.from(document.querySelectorAll('[data-daybook] li')).map(li => li.innerText.split('\\n')[2] ?? '').slice(0,3)`);
+check("only that stylist's rows remain", new Set(names?.filter(Boolean)).size <= 1, JSON.stringify(names));
+await shot("d5-filters");
+
+await clickExact("Clear filters");
+await sleep(1200);
+check("clearing filters restores the list", (await rowCount()) === before, `${await rowCount()} of ${before}`);
+
+// Click a row to view its docket
+await ev(`document.querySelectorAll('[data-daybook] li button')[0].click(), true`);
+await sleep(1600);
+const slipText = await ev(`document.querySelector('[aria-label^="Invoice"]')?.innerText.replace(/\\s+/g," ") ?? ''`);
+check("clicking a row opens the docket", slipText.length > 0);
+check("docket shows its line items", /ITEM QTY AMOUNT/i.test(slipText) || /Qty/i.test(slipText), slipText.slice(0, 70));
+check("docket shows the client", /[A-Z][a-z]+ [A-Z]/.test(slipText));
+check("docket shows how it was paid", /(Card|Cash|EFT|Voucher|On account)/i.test(slipText));
+await shot("d6-view-docket");
+
+// Historical docket too
+await clickExact("Close");
+await sleep(900);
+await ev(`document.querySelector('button[aria-label="Previous day"]').click()`);
+await sleep(1500);
+await ev(`document.querySelectorAll('[data-daybook] li button')[0].click(), true`);
+await sleep(1600);
+const histSlip = await ev(`document.querySelector('[aria-label^="Invoice"]')?.innerText.replace(/\\s+/g," ") ?? ''`);
+check("a past day's docket opens with its lines", histSlip.length > 0 && /Qty/i.test(histSlip), histSlip.slice(0, 60));
+await shot("d7-historical-docket");
 console.log(results.join("\n"));
 console.log(`\n${results.filter(r=>r.startsWith("PASS")).length}/${results.length} passed on ${BASE}`);
 

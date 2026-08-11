@@ -256,11 +256,17 @@ export interface DayBookEntry {
   v: number;
   /** Number of items. */
   i: number;
+  /** Lines as [descriptionIndex, qty, unitPrice, discountPercent, stylistId]. */
+  L: number[][];
+  /** Payments actually used, as [method, amount]. */
+  p: (string | number)[][];
 }
 
 export interface DayBook {
   from: string;
   to: string;
+  /** Item descriptions, referenced by index from each line. */
+  dict: string[];
   days: Record<string, DayBookEntry[]>;
 }
 

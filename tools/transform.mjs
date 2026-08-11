@@ -644,6 +644,22 @@ const daybookFrom = (() => {
   return d.toISOString().slice(0, 10);
 })();
 
+/**
+ * Item descriptions repeat constantly, so they are held once in a dictionary and
+ * referenced by index. That keeps every docket's lines available for viewing
+ * without the file ballooning.
+ */
+const descrDict = [];
+const descrIndex = new Map();
+const descrId = (text) => {
+  const key = String(text ?? "").trim();
+  if (!descrIndex.has(key)) {
+    descrIndex.set(key, descrDict.length);
+    descrDict.push(key);
+  }
+  return descrIndex.get(key);
+};
+
 const invoiceIndex = new Map();
 for (const row of rawInvoices) {
   const stamp = String(row.date ?? "");
@@ -660,10 +676,21 @@ for (const row of rawInvoices) {
       s: num(row.stylistId),
       v: money(row.total),
       i: 0,
+      // [descriptionIndex, qty, unitPrice, discountPercent, stylistId]
+      L: [],
+      // Only the methods actually used, e.g. [["card", 780]]
+      p: [
+        ["cash", money(row.cash)],
+        ["card", money(row.card)],
+        ["eft", money(row.eft)],
+        ["topay", money(row.toPay)],
+        ["voucher", money(row.voucher)],
+      ].filter(([, amount]) => amount > 0),
     };
     invoiceIndex.set(row.id, inv);
   }
   inv.i += 1;
+  inv.L.push([descrId(row.descr), num(row.qty) || 1, money(row.price), num(row.disc), num(row.stylistId)]);
 }
 
 const daybook = {};
@@ -756,7 +783,7 @@ const files = {
   "clients.json": clientSummaries,
   "demoday.json": demoday,
   "analytics.json": analytics,
-  "daybook.json": { from: daybookFrom, to: DEMO_DATE, days: daybook },
+  "daybook.json": { from: daybookFrom, to: DEMO_DATE, dict: descrDict, days: daybook },
 };
 
 for (const [name, data] of Object.entries(files)) {
