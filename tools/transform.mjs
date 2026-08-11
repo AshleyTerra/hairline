@@ -281,6 +281,18 @@ const tidyServiceName = (s) => {
   return /^[a-z]/.test(t) ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 };
 
+/**
+ * How often each item was actually rung up over the last 13 months, so the till
+ * can lead with what reception reaches for most instead of an alphabetical list.
+ */
+const timesSold = new Map();
+for (const line of rawInvoices) {
+  const key = String(line.descr || "").trim().toLowerCase();
+  if (!key) continue;
+  timesSold.set(key, (timesSold.get(key) ?? 0) + 1);
+}
+const popularityOf = (name) => timesSold.get(String(name || "").trim().toLowerCase()) ?? 0;
+
 const serviceByName = new Map();
 for (const s of rawServices) {
   if (!SERVICE_DEPTS.has(s.dept)) continue;
@@ -315,9 +327,13 @@ const deptRank = (d) => {
   return i === -1 ? DEPT_ORDER.length : i;
 };
 
-const services = [...serviceByName.values()].sort(
-  (a, b) => deptRank(a.dept) - deptRank(b.dept) || a.price - b.price
-);
+// Most-used first within each department: that is the order reception scans in.
+const services = [...serviceByName.values()]
+  .map((s) => ({ ...s, timesSold: popularityOf(s.name) }))
+  .sort(
+    (a, b) =>
+      deptRank(a.dept) - deptRank(b.dept) || b.timesSold - a.timesSold || a.price - b.price
+  );
 
 const serviceLookup = new Map(services.map((s) => [s.name.toLowerCase(), s]));
 
@@ -350,19 +366,23 @@ const allProducts = rawProducts
   .filter((p) => String(p.name || "").trim() && (num(p.price) > 0 || num(p.cost) > 0))
   .map(mapProduct);
 
+const withPopularity = (p) => ({ ...p, timesSold: popularityOf(p.name) });
+
 const products = {
   retail: allProducts
     .filter((p) => rawProducts.find((r) => r.id === p.id)?.kind === "R")
+    .map(withPopularity)
     .sort((a, b) => a.brand.localeCompare(b.brand) || a.name.localeCompare(b.name)),
   backbar: allProducts
     .filter((p) => rawProducts.find((r) => r.id === p.id)?.kind === "Stock Item")
+    .map(withPopularity)
     .sort((a, b) => a.brand.localeCompare(b.brand) || a.name.localeCompare(b.name)),
 };
 
-// Retail items most likely to be sold at the till (in stock, well-known brands first)
+// Retail for the till: grouped by vendor, most-sold first inside each vendor.
 const tillProducts = products.retail
   .filter((p) => p.price > 0)
-  .sort((a, b) => b.qty - a.qty)
+  .sort((a, b) => b.timesSold - a.timesSold || b.qty - a.qty)
   .slice(0, 120)
   .sort((a, b) => a.brand.localeCompare(b.brand) || a.name.localeCompare(b.name));
 

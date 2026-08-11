@@ -34,6 +34,8 @@ export interface Service {
   price: number;
   cost: number;
   mins: number;
+  /** Times rung up in the last 13 months, so the till can lead with these. */
+  timesSold: number;
 }
 
 export interface Product {
@@ -49,6 +51,8 @@ export interface Product {
   barcode: string | null;
   needsCount: boolean;
   lowStock: boolean;
+  /** Times rung up in the last 13 months. */
+  timesSold: number;
 }
 
 export interface ProductData {
@@ -222,12 +226,15 @@ export interface TillState {
 }
 
 export interface TillTotals {
+  /** Services and products only — this is the stylist's sales figure. */
   subtotal: number;
   vat: number;
+  tipTotal: number;
+  /** Subtotal plus tip: what the client actually pays. */
+  dueTotal: number;
   paid: number;
   balance: number;
   change: number;
-  tipTotal: number;
 }
 
 /** A completed sale rung up in the prototype. */

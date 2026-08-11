@@ -54,6 +54,18 @@ export const earningStylists = staff
 /** Preserves the transform's usage-based department order, not alphabetical. */
 export const serviceDepts = [...new Set(services.map((s) => s.dept))];
 
+/**
+ * Vendors that actually have retail on the shelf, busiest first — one tab each
+ * at the till, the way reception thinks about the retail wall.
+ */
+export const tillVendors = (() => {
+  const sold = new Map<string, number>();
+  for (const p of products.till) {
+    sold.set(p.brand, (sold.get(p.brand) ?? 0) + p.timesSold);
+  }
+  return [...sold.entries()].sort((a, b) => b[1] - a[1]).map(([brand]) => brand);
+})();
+
 export function servicesInDept(dept: string): Service[] {
   return services.filter((s) => s.dept === dept);
 }

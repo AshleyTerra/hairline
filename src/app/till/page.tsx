@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { ClientPicker } from "@/components/till/ClientPicker";
 import { ItemCatalogue } from "@/components/till/ItemCatalogue";
+import { TipPanel } from "@/components/till/TipPanel";
 import { PaymentPanel } from "@/components/till/PaymentPanel";
 import { GlobalSearch } from "@/components/till/GlobalSearch";
 import { demoday, earningStylists, getClient, getStaff, meta, staff } from "@/lib/data";
@@ -119,6 +120,7 @@ export default function TillPage() {
     addInvoice({
       clientId: state.clientId,
       clientName: state.clientName ?? "Walk-in",
+      // `total` is the sales figure; the tip is collected but reported apart.
       total: t.subtotal,
       lines: state.lines,
       payments: state.payments,
@@ -350,35 +352,11 @@ export default function TillPage() {
 
           {hasLines && (
             <>
-              {tipStylists.length > 0 && (
-                <div className="border-t border-edge-faint px-5 py-3">
-                  <p className="mb-1.5 text-[10.5px] uppercase tracking-[0.1em] text-faintink">
-                    Tip
-                  </p>
-                  <div className="flex flex-col gap-1.5">
-                    {tipStylists.map((s) => (
-                      <label key={s.id} className="flex items-center justify-between gap-2">
-                        <span className="text-[12.5px] text-body">{s.name}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={till.tips.find((t) => t.stylistId === s.id)?.amount ?? ""}
-                          placeholder="0"
-                          onChange={(e) =>
-                            dispatch({
-                              type: "tip",
-                              stylistId: s.id,
-                              amount: Number(e.target.value) || 0,
-                            })
-                          }
-                          aria-label={`Tip for ${s.name}`}
-                          className="tnum w-20 rounded-lg bg-canvas px-2 py-1 text-right text-[12.5px] text-ink"
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <TipPanel
+                tips={till.tips}
+                suggestedIds={tipStylists.map((s) => s.id)}
+                onTip={(stylistId, amount) => dispatch({ type: "tip", stylistId, amount })}
+              />
 
               {/* Totals — the anchor of the screen */}
               <div
@@ -394,6 +372,12 @@ export default function TillPage() {
                   <span>VAT included (15%)</span>
                   <span className="tnum">{zar(totals.vat)}</span>
                 </div>
+                {totals.tipTotal > 0 && (
+                  <div className="mt-1 flex justify-between text-[12.5px] text-[#d8d1c5]">
+                    <span>Tip</span>
+                    <span className="tnum">+ {zar(totals.tipTotal)}</span>
+                  </div>
+                )}
                 {till.payments.map((p, i) => (
                   <div
                     key={`${p.method}-${i}`}

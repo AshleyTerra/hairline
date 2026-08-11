@@ -81,12 +81,66 @@ describe("till payments", () => {
 });
 
 describe("till tips", () => {
-  it("tracks tips per stylist and keeps them out of the invoice total", () => {
+  it("tracks tips per stylist and keeps them out of the sales figure", () => {
     let state = tillReduce(emptyTill(), { type: "add", line: line(300) });
     state = tillReduce(state, { type: "tip", stylistId: 7, amount: 40 });
     expect(totals(state).subtotal).toBe(300);
     expect(totals(state).tipTotal).toBe(40);
     expect(state.tips).toEqual([{ stylistId: 7, amount: 40 }]);
+  });
+
+  it("charges the tip to the client on top of the sale", () => {
+    let state = tillReduce(emptyTill(), { type: "add", line: line(300) });
+    state = tillReduce(state, { type: "tip", stylistId: 7, amount: 40 });
+    const t = totals(state);
+    // The client owes the tip too, so it cannot be forgotten at the card machine…
+    expect(t.dueTotal).toBe(340);
+    expect(t.balance).toBe(340);
+    // …but the stylist's sales figure stays clean.
+    expect(t.subtotal).toBe(300);
+  });
+
+  it("clears the balance only once the tip is covered as well", () => {
+    let state = tillReduce(emptyTill(), { type: "add", line: line(300) });
+    state = tillReduce(state, { type: "tip", stylistId: 7, amount: 40 });
+    state = tillReduce(state, { type: "pay", payment: { method: "card", amount: 300 } });
+    expect(totals(state).balance).toBe(40);
+    state = tillReduce(state, { type: "pay", payment: { method: "card", amount: 40 } });
+    expect(totals(state).balance).toBe(0);
+  });
+
+  it("lets a card cover the sale and the tip in one swipe", () => {
+    let state = tillReduce(emptyTill(), { type: "add", line: line(500) });
+    state = tillReduce(state, { type: "tip", stylistId: 3, amount: 50 });
+    state = tillReduce(state, { type: "pay", payment: { method: "card", amount: 999 } });
+    // Card is clamped to what is owed, tip included — never more.
+    expect(totals(state).paid).toBe(550);
+    expect(totals(state).balance).toBe(0);
+    expect(totals(state).change).toBe(0);
+  });
+
+  it("gives change against the sale plus the tip", () => {
+    let state = tillReduce(emptyTill(), { type: "add", line: line(300) });
+    state = tillReduce(state, { type: "tip", stylistId: 7, amount: 40 });
+    state = tillReduce(state, { type: "pay", payment: { method: "cash", amount: 400 } });
+    expect(totals(state).change).toBe(60);
+  });
+
+  it("supports a tip for someone who did no billable work, such as an assistant", () => {
+    let state = tillReduce(emptyTill(), { type: "add", line: line(300, 1, 0) });
+    state = tillReduce(state, { type: "tip", stylistId: 21, amount: 30 });
+    expect(state.tips).toEqual([{ stylistId: 21, amount: 30 }]);
+    expect(totals(state).dueTotal).toBe(330);
+  });
+
+  it("adds up tips for several operators on one sale", () => {
+    let state = tillReduce(emptyTill(), { type: "add", line: line(600) });
+    state = tillReduce(state, { type: "tip", stylistId: 1, amount: 50 });
+    state = tillReduce(state, { type: "tip", stylistId: 2, amount: 20 });
+    const t = totals(state);
+    expect(t.tipTotal).toBe(70);
+    expect(t.dueTotal).toBe(670);
+    expect(t.subtotal).toBe(600);
   });
 
   it("replaces rather than stacks a tip for the same stylist", () => {

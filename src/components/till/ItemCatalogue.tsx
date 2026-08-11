@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { products, serviceDepts, services } from "@/lib/data";
+import { products, serviceDepts, services, tillVendors } from "@/lib/data";
 import { zar } from "@/lib/format";
 import type { Product, Service } from "@/lib/types";
 
@@ -14,37 +14,50 @@ interface ItemCatalogueProps {
 
 type Tab = "services" | "retail";
 
+/**
+ * Services and retail as scannable lists, ordered by how often each item is
+ * actually rung up. Reception asked for lists rather than tiles: roughly twice
+ * as many items fit on screen, and the ones they reach for are at the top.
+ */
 export function ItemCatalogue({ onAddService, onAddProduct, query = "" }: ItemCatalogueProps) {
   const [tab, setTab] = useState<Tab>("services");
   const [dept, setDept] = useState<string>(serviceDepts[0] ?? "");
+  const [vendor, setVendor] = useState<string>(tillVendors[0] ?? "");
 
   const q = query.trim().toLowerCase();
 
   const shownServices = useMemo(() => {
-    if (q) return services.filter((s) => s.name.toLowerCase().includes(q)).slice(0, 40);
+    if (q) {
+      return services
+        .filter((s) => s.name.toLowerCase().includes(q))
+        .sort((a, b) => b.timesSold - a.timesSold)
+        .slice(0, 60);
+    }
     return services.filter((s) => s.dept === dept);
   }, [dept, q]);
 
   const shownProducts = useMemo(() => {
-    if (!q) return products.till.slice(0, 40);
-    return products.till
-      .filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.brand.toLowerCase().includes(q) ||
-          (p.barcode ?? "").includes(q)
-      )
-      .slice(0, 40);
-  }, [q]);
+    if (q) {
+      return products.till
+        .filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.brand.toLowerCase().includes(q) ||
+            (p.barcode ?? "").includes(q)
+        )
+        .slice(0, 60);
+    }
+    return products.till.filter((p) => p.brand === vendor);
+  }, [vendor, q]);
 
   const empty =
     (tab === "services" && shownServices.length === 0) ||
     (tab === "retail" && shownProducts.length === 0);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3.5">
-      {/* Departments wrap so reception sees every one — no hidden scroll */}
-      <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* Services / Retail, then the tabs that belong to whichever is showing */}
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
         <div className="mr-1 flex gap-1">
           {(["services", "retail"] as Tab[]).map((t) => (
             <button
@@ -53,7 +66,7 @@ export function ItemCatalogue({ onAddService, onAddProduct, query = "" }: ItemCa
               onClick={() => setTab(t)}
               aria-pressed={tab === t}
               className={`rounded-full px-[18px] py-2 text-[13px] font-semibold capitalize transition-colors ${
-                tab === t ? "bg-white text-ink" : "bg-canvas text-taupe-deep hover:bg-chip"
+                tab === t ? "bg-white text-ink shadow-sm" : "bg-canvas text-taupe-deep hover:bg-chip"
               }`}
             >
               {t}
@@ -61,73 +74,76 @@ export function ItemCatalogue({ onAddService, onAddProduct, query = "" }: ItemCa
           ))}
         </div>
 
-        {tab === "services" &&
-          !q &&
-          serviceDepts.map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setDept(d)}
-              aria-pressed={dept === d}
-              className={`whitespace-nowrap rounded-full border px-3 py-[5px] text-[12.5px] font-semibold transition-colors ${
-                dept === d
-                  ? "border-ink bg-ink text-white"
-                  : "border-edge-soft bg-white text-taupe-deep hover:border-taupe"
-              }`}
-            >
-              {d}
-            </button>
-          ))}
+        {!q &&
+          (tab === "services" ? serviceDepts : tillVendors).map((name) => {
+            const active = tab === "services" ? dept === name : vendor === name;
+            return (
+              <button
+                key={name}
+                type="button"
+                onClick={() => (tab === "services" ? setDept(name) : setVendor(name))}
+                aria-pressed={active}
+                className={`whitespace-nowrap rounded-full border px-3 py-[5px] text-[12.5px] font-semibold transition-colors ${
+                  active
+                    ? "border-ink bg-ink text-white"
+                    : "border-edge-soft bg-white text-taupe-deep hover:border-taupe"
+                }`}
+              >
+                {name}
+              </button>
+            );
+          })}
       </div>
 
-      {/* Tile grid */}
-      <div className="min-h-0 flex-1 overflow-y-auto pb-2">
-        {/* Tracks the column's own width, so it reaches 4-up whenever there is room */}
-        <div
-          className="grid gap-[7px]"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(172px, 1fr))" }}
-        >
-          {tab === "services"
-            ? shownServices.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => onAddService(s)}
-                  className="flex min-h-[72px] min-w-0 flex-col justify-between rounded-[10px] border border-edge-soft bg-white px-[11px] py-2.5 text-left shadow-[0_1px_2px_rgba(26,24,22,.03)] transition-colors hover:border-taupe active:bg-chip"
-                >
-                  <span className="text-[13px] leading-[1.3] text-ink">{s.name}</span>
-                  <span className="mt-2 flex items-baseline justify-between gap-1.5">
-                    <span className="text-[10.5px] text-faintink">{s.mins} min</span>
-                    <span className="tnum text-[16px] font-semibold tracking-[-0.01em] text-ink">
-                      {zar(s.price)}
-                    </span>
-                  </span>
-                </button>
-              ))
-            : shownProducts.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => onAddProduct(p)}
-                  className="flex min-h-[72px] min-w-0 flex-col justify-between rounded-[10px] border border-edge-soft bg-white px-[11px] py-2.5 text-left shadow-[0_1px_2px_rgba(26,24,22,.03)] transition-colors hover:border-taupe active:bg-chip"
-                >
-                  <span className="text-[13px] leading-[1.3] text-ink">{p.name}</span>
-                  <span className="mt-2 flex items-baseline justify-between gap-1.5">
-                    <span className="truncate text-[10.5px] text-faintink">
-                      {p.brand} · {p.qty > 0 ? `${p.qty} on hand` : "not in stock"}
-                    </span>
-                    <span className="tnum shrink-0 text-[16px] font-semibold tracking-[-0.01em] text-ink">
-                      {zar(p.price)}
-                    </span>
-                  </span>
-                </button>
-              ))}
-        </div>
-
-        {empty && (
-          <p className="px-2 py-10 text-center text-[14px] text-faintink">
+      {/* The list. Two columns where there is room, so more of it is visible. */}
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-[10px] border border-edge-soft bg-white">
+        {empty ? (
+          <p className="px-4 py-10 text-center text-[14px] text-faintink">
             Nothing matches “{query}”.
           </p>
+        ) : (
+          <ul
+            className="grid"
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))" }}
+          >
+            {tab === "services"
+              ? shownServices.map((s) => (
+                  <li key={s.id} className="border-b border-edge-faint">
+                    <button
+                      type="button"
+                      onClick={() => onAddService(s)}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-canvas active:bg-chip"
+                    >
+                      <span className="min-w-0 text-[13.5px] leading-snug text-ink">{s.name}</span>
+                      <span className="tnum shrink-0 text-[14.5px] font-semibold text-ink">
+                        {zar(s.price)}
+                      </span>
+                    </button>
+                  </li>
+                ))
+              : shownProducts.map((p) => (
+                  <li key={p.id} className="border-b border-edge-faint">
+                    <button
+                      type="button"
+                      onClick={() => onAddProduct(p)}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-canvas active:bg-chip"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-[13.5px] leading-snug text-ink">
+                          {p.name}
+                        </span>
+                        <span className="block text-[11px] text-faintink">
+                          {q ? `${p.brand} · ` : ""}
+                          {p.qty > 0 ? `${p.qty} on hand` : "not in stock"}
+                        </span>
+                      </span>
+                      <span className="tnum shrink-0 text-[14.5px] font-semibold text-ink">
+                        {zar(p.price)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+          </ul>
         )}
       </div>
     </div>

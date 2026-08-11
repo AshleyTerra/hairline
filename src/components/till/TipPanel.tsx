@@ -1,0 +1,133 @@
+"use client";
+
+import { useState } from "react";
+import { staff } from "@/lib/data";
+import { zar } from "@/lib/format";
+import type { Tip } from "@/lib/types";
+
+interface TipPanelProps {
+  tips: Tip[];
+  /** Stylists already on the sale, offered first in the dropdown. */
+  suggestedIds: number[];
+  onTip: (stylistId: number, amount: number) => void;
+}
+
+/**
+ * Tips, with an operator dropdown so anyone can be tipped — including the
+ * assistants, who earn tips daily but never appear on the invoice lines.
+ */
+export function TipPanel({ tips, suggestedIds, onTip }: TipPanelProps) {
+  const [adding, setAdding] = useState(false);
+  const [who, setWho] = useState<number | "">(suggestedIds[0] ?? "");
+  const [amount, setAmount] = useState("");
+
+  const operators = [
+    ...staff.filter((s) => suggestedIds.includes(s.id)),
+    ...staff.filter((s) => !suggestedIds.includes(s.id) && s.role !== "reception"),
+  ];
+
+  function add() {
+    const value = Number(amount);
+    if (who === "" || !Number.isFinite(value) || value <= 0) return;
+    onTip(Number(who), value);
+    setAmount("");
+    setAdding(false);
+  }
+
+  const nameOf = (id: number) => staff.find((s) => s.id === id)?.name ?? "Unknown";
+
+  return (
+    <div className="shrink-0 border-t border-edge-faint px-5 py-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <p className="text-[10.5px] uppercase tracking-[0.1em] text-faintink">Tip</p>
+        {!adding && (
+          <button
+            type="button"
+            onClick={() => {
+              setAdding(true);
+              setWho(suggestedIds[0] ?? "");
+            }}
+            className="text-[11.5px] font-semibold text-taupe transition-colors hover:text-taupe-deep"
+          >
+            + Add tip
+          </button>
+        )}
+      </div>
+
+      {tips.length > 0 && (
+        <ul className="mb-1.5 flex flex-col gap-1">
+          {tips.map((t) => (
+            <li key={t.stylistId} className="flex items-center justify-between gap-2">
+              <span className="truncate text-[12.5px] text-body">{nameOf(t.stylistId)}</span>
+              <span className="flex shrink-0 items-center gap-2">
+                <span className="tnum text-[12.5px] font-semibold text-ink">{zar(t.amount)}</span>
+                <button
+                  type="button"
+                  onClick={() => onTip(t.stylistId, 0)}
+                  aria-label={`Remove tip for ${nameOf(t.stylistId)}`}
+                  className="text-faintink transition-colors hover:text-crit"
+                >
+                  ✕
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {adding && (
+        <div className="flex items-center gap-1.5">
+          <select
+            value={who}
+            onChange={(e) => setWho(e.target.value === "" ? "" : Number(e.target.value))}
+            aria-label="Who is the tip for"
+            className="min-w-0 flex-1 rounded-lg bg-canvas px-2 py-1.5 text-[12.5px] text-ink"
+          >
+            <option value="">Choose operator…</option>
+            {operators.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+                {s.role === "assistant" ? " (assistant)" : ""}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            min={0}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+            }}
+            placeholder="0"
+            aria-label="Tip amount"
+            className="tnum w-20 rounded-lg bg-canvas px-2 py-1.5 text-right text-[12.5px] text-ink"
+          />
+          <button
+            type="button"
+            onClick={add}
+            className="rounded-lg bg-taupe-deep px-2.5 py-1.5 text-[12px] font-semibold text-white"
+          >
+            Add
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdding(false)}
+            className="px-1 text-[12px] text-faintink hover:text-ink"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {tips.length > 0 && (
+        <p className="mt-1.5 text-[11px] text-faintink">
+          Added to what the client pays, but kept out of the stylist&apos;s sales figure.
+        </p>
+      )}
+    </div>
+  );
+}

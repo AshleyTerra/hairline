@@ -47,12 +47,27 @@ function subtotalCents(state: TillState): number {
  * other method is clamped to what is still owing, so a card or voucher can
  * never be over-captured.
  */
+function tipCents(state: TillState): number {
+  return state.tips.reduce((sum, t) => sum + toCents(t.amount), 0);
+}
+
+/**
+ * What the client actually has to pay: the sale plus any tip.
+ *
+ * The tip is collected here so it cannot be forgotten at the card machine, but
+ * it never enters `subtotal` — a tip is not turnover, and counting it would
+ * inflate the stylist's sales and their commission.
+ */
+function dueCents(state: TillState): number {
+  return subtotalCents(state) + tipCents(state);
+}
+
 function applicableCents(state: TillState, payment: Payment): number {
   const requested = toCents(payment.amount);
   if (requested <= 0) return 0;
   if (payment.method === "cash") return requested;
 
-  const owing = subtotalCents(state) - paidCents(state);
+  const owing = dueCents(state) - paidCents(state);
   return Math.max(0, Math.min(requested, owing));
 }
 
@@ -62,17 +77,19 @@ function paidCents(state: TillState): number {
 
 export function totals(state: TillState): TillTotals {
   const subtotal = subtotalCents(state);
+  const tipTotal = tipCents(state);
+  const due = subtotal + tipTotal;
   const paid = paidCents(state);
-  const outstanding = subtotal - paid;
-  const tipTotal = state.tips.reduce((sum, t) => sum + toCents(t.amount), 0);
+  const outstanding = due - paid;
 
   return {
     subtotal: toRands(subtotal),
     vat: toRands(Math.round((subtotal * VAT_RATE) / (1 + VAT_RATE))),
+    tipTotal: toRands(tipTotal),
+    dueTotal: toRands(due),
     paid: toRands(paid),
     balance: toRands(Math.max(0, outstanding)),
     change: toRands(Math.max(0, -outstanding)),
-    tipTotal: toRands(tipTotal),
   };
 }
 
