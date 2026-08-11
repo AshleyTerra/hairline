@@ -4,6 +4,10 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import { ClientPicker } from "@/components/till/ClientPicker";
 import { ItemCatalogue } from "@/components/till/ItemCatalogue";
 import { TipPanel } from "@/components/till/TipPanel";
+import { DocketBar } from "@/components/till/DocketBar";
+import { NewClientDialog } from "@/components/till/NewClientDialog";
+import { InvoiceSlip, type InvoiceSlipData } from "@/components/till/InvoiceSlip";
+import { closeDocket, findDocket, nextNumber, openDocket, saveDocket } from "@/lib/dockets";
 import { PaymentPanel } from "@/components/till/PaymentPanel";
 import { GlobalSearch } from "@/components/till/GlobalSearch";
 import { demoday, earningStylists, getClient, getStaff, meta, staff } from "@/lib/data";
@@ -16,8 +20,11 @@ let lineCounter = 0;
 const nextKey = () => `line-${(lineCounter += 1)}`;
 
 export default function TillPage() {
-  const { invoices, addInvoice } = useStore();
+  const { invoices, addInvoice, dockets, setDockets, addClient } = useStore();
   const [till, dispatch] = useReducer(tillReduce, undefined, emptyTill);
+  const [docketNo, setDocketNo] = useState<number | null>(null);
+  const [addingClient, setAddingClient] = useState(false);
+  const [slip, setSlip] = useState<InvoiceSlipData | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [toast, setToast] = useState<{ total: number; seconds: number } | null>(null);
   const [query, setQuery] = useState("");
@@ -39,6 +46,15 @@ export default function TillPage() {
     const id = window.setTimeout(() => setToast(null), 6000);
     return () => window.clearTimeout(id);
   }, [toast]);
+
+  // Park whatever is on screen against the open docket, so switching between
+  // clients never loses work.
+  useEffect(() => {
+    if (docketNo == null) return;
+    setDockets(saveDocket(dockets, docketNo, till));
+    // `dockets` is deliberately omitted: including it would loop on its own write.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [till, docketNo]);
 
   const defaultStylist = useMemo(() => {
     const client = getClient(till.clientId);
@@ -89,10 +105,38 @@ export default function TillPage() {
 
   /** Voids the sale, including anything half-typed on the keypad. */
   function clearSale() {
+    if (docketNo != null) setDockets(closeDocket(dockets, docketNo));
+    setDocketNo(null);
     dispatch({ type: "clear" });
     setAmount("");
     setMethod("card");
     setEditing(null);
+  }
+
+  /** Parks the current sale and starts a fresh docket. */
+  function newDocket() {
+    const { docket, dockets: next } = openDocket(
+      docketNo != null ? saveDocket(dockets, docketNo, till) : dockets,
+      emptyTill(),
+      meta.lastInvoiceNumber,
+      new Date().toISOString()
+    );
+    setDockets(next);
+    setDocketNo(docket.number);
+    dispatch({ type: "clear" });
+    setAmount("");
+  }
+
+  /** Brings a parked docket back to the counter. */
+  function openExisting(number: number) {
+    if (number === docketNo) return;
+    const saved = docketNo != null ? saveDocket(dockets, docketNo, till) : dockets;
+    setDockets(saved);
+    const target = findDocket(saved, number);
+    if (!target) return;
+    setDocketNo(number);
+    dispatch({ type: "load", state: target.state });
+    setAmount("");
   }
 
   /** Keypad input. The functional update keeps every press, however fast. */
@@ -117,6 +161,26 @@ export default function TillPage() {
   function complete(state = till) {
     const t = computeTotals(state);
     if (state.lines.length === 0 || t.balance > 0) return;
+
+    // The docket's number becomes the invoice number.
+    const number = docketNo ?? nextNumber(dockets, meta.lastInvoiceNumber);
+    const client = getClient(state.clientId);
+    setSlip({
+      number,
+      date: new Date().toISOString(),
+      clientName: state.clientName ?? "Walk-in",
+      clientTel: client?.tel,
+      lines: state.lines,
+      payments: state.payments,
+      tips: state.tips,
+      subtotal: t.subtotal,
+      vat: t.vat,
+      tipTotal: t.tipTotal,
+      dueTotal: t.dueTotal,
+    });
+    if (docketNo != null) setDockets(closeDocket(dockets, docketNo));
+    setDocketNo(null);
+
     addInvoice({
       clientId: state.clientId,
       clientName: state.clientName ?? "Walk-in",
@@ -200,6 +264,13 @@ export default function TillPage() {
             </div>
           )}
 
+          <DocketBar
+            dockets={dockets}
+            activeNumber={docketNo}
+            onOpen={openExisting}
+            onNew={newDocket}
+          />
+
           <ItemCatalogue onAddService={addService} onAddProduct={addProduct} query={query} />
 
           {invoices.length > 0 && (
@@ -217,8 +288,10 @@ export default function TillPage() {
           <ClientPicker
             clientId={till.clientId}
             clientName={till.clientName}
+            docketNumber={docketNo}
             onChange={() => window.dispatchEvent(new Event("hairline:focus-search"))}
-            onClear={hasLines ? clearSale : undefined}
+            onAddClient={() => setAddingClient(true)}
+            onClear={hasLines || docketNo != null ? clearSale : undefined}
           />
 
           {/* Lines — a floor height so a tall keypad can never squeeze them away */}
@@ -424,6 +497,24 @@ export default function TillPage() {
           )}
         </aside>
       </div>
+
+      {addingClient && (
+        <NewClientDialog
+          onClose={() => setAddingClient(false)}
+          onSave={(input) => {
+            const created = addClient(input);
+            dispatch({
+              type: "setClient",
+              clientId: created.id,
+              clientName: created.name,
+              at: Date.now(),
+            });
+            setAddingClient(false);
+          }}
+        />
+      )}
+
+      {slip && <InvoiceSlip data={slip} onClose={() => setSlip(null)} />}
     </div>
   );
 }

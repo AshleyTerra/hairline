@@ -103,6 +103,7 @@ export function ItemCatalogue({ onAddService, onAddProduct, query = "" }: ItemCa
           </p>
         ) : (
           <ul
+            data-catalogue={tab}
             className="grid"
             style={{ gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))" }}
           >

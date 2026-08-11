@@ -6,8 +6,12 @@ import { initials } from "@/lib/format";
 interface ClientPickerProps {
   clientId: number | null;
   clientName: string | null;
+  /** Shown beside the client so reception knows which docket is on screen. */
+  docketNumber?: number | null;
   /** Opens the top-bar search so a client can be chosen. */
   onChange: () => void;
+  /** Captures a walk-in who is not on file yet. */
+  onAddClient?: () => void;
   /** Voids the whole sale. Only offered once there is something to void. */
   onClear?: () => void;
 }
@@ -19,21 +23,32 @@ interface ClientPickerProps {
 export function ClientPicker({
   clientId,
   clientName,
+  docketNumber,
   onChange,
+  onAddClient,
   onClear,
 }: ClientPickerProps) {
   const client = clientId != null ? clients.find((c) => c.id === clientId) : undefined;
 
   if (!clientName) {
     return (
-      <div className="flex h-[70px] shrink-0 items-center gap-3 border-b border-edge-faint px-5">
+      <div className="flex h-[70px] shrink-0 items-center gap-2 border-b border-edge-faint px-5">
         <button
           type="button"
           onClick={onChange}
-          className="flex-1 rounded-[10px] bg-canvas px-4 py-2.5 text-left text-[14px] text-taupe-deep transition-colors hover:bg-chip"
+          className="min-w-0 flex-1 rounded-[10px] bg-canvas px-4 py-2.5 text-left text-[14px] text-taupe-deep transition-colors hover:bg-chip"
         >
           Walk-in — pick a client
         </button>
+        {onAddClient && (
+          <button
+            type="button"
+            onClick={onAddClient}
+            className="shrink-0 whitespace-nowrap text-[12px] font-semibold text-taupe transition-colors hover:text-taupe-deep"
+          >
+            + New
+          </button>
+        )}
         {onClear && (
           <button
             type="button"
@@ -76,9 +91,14 @@ export function ClientPicker({
             )}
           </div>
           <p className="truncate text-[12px] text-faintink">
+            {docketNumber != null && (
+              <span className="tnum mr-1 text-taupe-deep">Docket #{docketNumber} ·</span>
+            )}
             {client
               ? `${client.visitCount} visits${stylist ? ` · usually ${stylist.name}` : ""}`
-              : "Walk-in — no client file"}
+              : clientId != null && clientId < 0
+                ? "New client, added today"
+                : "Walk-in — no client file"}
           </p>
         </div>
 

@@ -179,6 +179,8 @@ export interface Analytics {
 
 export interface Meta {
   company: string;
+  /** The salon's highest invoice number so far; new dockets carry on from it. */
+  lastInvoiceNumber: number;
   demoDate: string;
   dataAsOf: string;
   totalInvoicesAllTime: number;
@@ -235,6 +237,16 @@ export interface TillTotals {
   paid: number;
   balance: number;
   change: number;
+}
+
+/** A client captured at the till during the demo. */
+export interface NewClient {
+  /** Negative, to stay clear of the migrated client file. */
+  id: number;
+  name: string;
+  tel: string;
+  email: string;
+  notes: string;
 }
 
 /** A completed sale rung up in the prototype. */

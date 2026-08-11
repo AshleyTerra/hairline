@@ -131,7 +131,12 @@ export const SCREENS: readonly ScreenDef[] = [
   { key: "stock", label: "Stock", href: "/stock", description: "Retail, back bar and ordering" },
   { key: "staff", label: "Team", href: "/staff", description: "Staff profiles and portfolios" },
   { key: "cashup", label: "Cash-up", href: "/cashup", description: "Count the drawer, close the day" },
-  { key: "pricing", label: "Pricing", href: "/pricing", description: "Service menu and price list" },
+  {
+    key: "pricing",
+    label: "Price menu",
+    href: "/pricing",
+    description: "Service and retail pricing, and the printed client menu",
+  },
   { key: "admin", label: "Admin", href: "/admin", description: "Users, data and imports" },
 ];
 

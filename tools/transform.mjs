@@ -627,7 +627,11 @@ const analytics = {
 
 // ---------------------------------------------------------------------- meta
 
+// The salon's highest invoice number so far: new dockets carry on from here.
+const lastInvoiceNumber = rawInvoices.reduce((max, i) => Math.max(max, num(i.id)), 0);
+
 const meta = {
+  lastInvoiceNumber,
   company: rawMeta.companyName || "Hairline",
   demoDate: DEMO_DATE,
   dataAsOf: String(rawMeta.maxInvoiceDate).slice(0, 10),

@@ -29,6 +29,8 @@ export type TillAction =
   | { type: "pay"; payment: Payment }
   | { type: "unpay"; index: number }
   | { type: "tip"; stylistId: number; amount: number }
+  /** Restores a parked docket exactly as it was left. */
+  | { type: "load"; state: TillState }
   | { type: "clear" };
 
 /** Cents charged for a single line, after quantity and percentage discount. */
@@ -134,6 +136,9 @@ export function tillReduce(state: TillState, action: TillAction): TillState {
       if (action.amount <= 0) return { ...state, tips: others };
       return { ...state, tips: [...others, { stylistId: action.stylistId, amount: action.amount }] };
     }
+
+    case "load":
+      return action.state;
 
     case "clear":
       return emptyTill();

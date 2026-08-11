@@ -3,6 +3,8 @@
 import { useCallback, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import type { PlayInvoice, Role } from "./types";
 import { type SignedInUser } from "./auth";
+import type { Docket } from "./dockets";
+import type { NewClient } from "./types";
 import {
   DEFAULT_PERMISSIONS,
   defaultUsers,
@@ -18,6 +20,8 @@ const USER_KEY = "hairline-demo-user";
 const USERS_KEY = "hairline-demo-users";
 const PERMS_KEY = "hairline-demo-permissions";
 const IMPORTED_KEY = "hairline-demo-imported-clients";
+const DOCKETS_KEY = "hairline-demo-dockets";
+const NEWCLIENTS_KEY = "hairline-demo-new-clients";
 
 interface DemoState {
   user: SignedInUser | null;
@@ -27,6 +31,10 @@ interface DemoState {
   users: ManagedUser[];
   permissions: Permissions;
   importedClients: ImportedClient[];
+  /** Sales in progress, one per client at the counter. */
+  dockets: Docket[];
+  /** Clients added at the till during the demo. */
+  newClients: NewClient[];
   /** False until the client has read localStorage, so the shell can hold back. */
   hydrated: boolean;
 }
@@ -39,6 +47,8 @@ const SERVER_STATE: DemoState = {
   users: defaultUsers(),
   permissions: DEFAULT_PERMISSIONS,
   importedClients: [],
+  dockets: [],
+  newClients: [],
   hydrated: false,
 };
 
@@ -70,6 +80,8 @@ class DemoStore {
         users: read<ManagedUser[]>(USERS_KEY, defaultUsers()),
         permissions: read<Permissions>(PERMS_KEY, DEFAULT_PERMISSIONS),
         importedClients: read<ImportedClient[]>(IMPORTED_KEY, []),
+        dockets: read<Docket[]>(DOCKETS_KEY, []),
+        newClients: read<NewClient[]>(NEWCLIENTS_KEY, []),
         hydrated: true,
       };
     }
@@ -131,6 +143,23 @@ class DemoStore {
     this.set({ invoices: [] });
   }
 
+  setDockets(dockets: Docket[]) {
+    write(DOCKETS_KEY, dockets);
+    this.set({ dockets });
+  }
+
+  /** Adds a client captured at the till and returns the record. */
+  addClient(input: Omit<NewClient, "id">): NewClient {
+    const existing = this.getSnapshot().newClients;
+    // Negative ids keep these clear of the migrated client file.
+    const id = -(existing.length + 1);
+    const created: NewClient = { ...input, id };
+    const newClients = [...existing, created];
+    write(NEWCLIENTS_KEY, newClients);
+    this.set({ newClients });
+    return created;
+  }
+
   setUsers(users: ManagedUser[]) {
     write(USERS_KEY, users);
     this.set({ users });
@@ -158,11 +187,15 @@ class DemoStore {
     write(USERS_KEY, defaultUsers());
     write(PERMS_KEY, DEFAULT_PERMISSIONS);
     write(IMPORTED_KEY, []);
+    write(DOCKETS_KEY, []);
+    write(NEWCLIENTS_KEY, []);
     this.set({
       invoices: [],
       users: defaultUsers(),
       permissions: DEFAULT_PERMISSIONS,
       importedClients: [],
+      dockets: [],
+      newClients: [],
     });
   }
 }
@@ -225,6 +258,11 @@ export function useStore() {
   );
   const clearImportedClients = useCallback(() => store.clearImportedClients(), []);
   const resetDemo = useCallback(() => store.resetDemo(), []);
+  const setDockets = useCallback((d: Docket[]) => store.setDockets(d), []);
+  const addClient = useCallback(
+    (input: Omit<NewClient, "id">) => store.addClient(input),
+    []
+  );
 
   return useMemo(
     () => ({
@@ -235,6 +273,8 @@ export function useStore() {
       users: state.users,
       permissions: state.permissions,
       importedClients: state.importedClients,
+      dockets: state.dockets,
+      newClients: state.newClients,
       hydrated: state.hydrated,
       signIn,
       signOut,
@@ -247,8 +287,10 @@ export function useStore() {
       addImportedClients,
       clearImportedClients,
       resetDemo,
+      setDockets,
+      addClient,
     }),
     [state, signIn, signOut, setRole, setStylistId, addInvoice, clearInvoices, setUsers,
-     setPermissions, addImportedClients, clearImportedClients, resetDemo]
+     setPermissions, addImportedClients, clearImportedClients, resetDemo, setDockets, addClient]
   );
 }
