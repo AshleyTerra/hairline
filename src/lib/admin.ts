@@ -175,6 +175,32 @@ export function isLocked(role: Role, screen: string): boolean {
   return LOCKED.some((l) => l.role === role && l.screen === screen);
 }
 
+export const SCREEN_KEYS: readonly string[] = SCREENS.map((s) => s.key);
+
+/**
+ * Permissions are saved in the browser, so a returning user carries a list
+ * written before newer screens existed — which would silently hide them, even
+ * from the owner. Grant any screen added since, following the defaults for that
+ * role, while leaving deliberate choices alone.
+ */
+export function reconcilePermissions(
+  stored: Permissions,
+  knownKeys: readonly string[]
+): { permissions: Permissions; knownKeys: string[]; added: string[] } {
+  const current = [...SCREEN_KEYS];
+  const added = current.filter((key) => !knownKeys.includes(key));
+  if (added.length === 0) return { permissions: stored, knownKeys: current, added };
+
+  const permissions = { ...stored };
+  for (const role of Object.keys(permissions) as Role[]) {
+    const grant = added.filter((key) => (DEFAULT_PERMISSIONS[role] ?? []).includes(key));
+    if (grant.length > 0) {
+      permissions[role] = [...new Set([...(permissions[role] ?? []), ...grant])];
+    }
+  }
+  return { permissions, knownKeys: current, added };
+}
+
 /**
  * Where a role should land. Reception has no dashboard, so sending everyone to
  * "/" would drop them on a screen their own role forbids.

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PERMISSIONS,
   SCREENS,
+  SCREEN_KEYS,
+  reconcilePermissions,
   addUser,
   canAccess,
   defaultUsers,
@@ -152,6 +154,52 @@ describe("screen permissions", () => {
 
   it("falls back to the root when a role has no screens at all", () => {
     expect(homeFor({ ...DEFAULT_PERMISSIONS, stylist: [] }, "stylist")).toBe("/");
+  });
+
+  it("grants a newly added screen to roles whose defaults include it", () => {
+    // A stored list written before "reports" existed.
+    const stored = {
+      owner: SCREENS.map((s) => s.key).filter((k) => k !== "reports"),
+      reception: ["till", "clients"],
+      stylist: ["dashboard"],
+    };
+    const known = stored.owner;
+    const { permissions, added } = reconcilePermissions(stored, known);
+    expect(added).toContain("reports");
+    expect(canAccess(permissions, "owner", "reports")).toBe(true);
+  });
+
+  it("does not grant a new screen to a role whose defaults exclude it", () => {
+    const stored = {
+      owner: SCREENS.map((s) => s.key).filter((k) => k !== "reports"),
+      reception: ["till", "clients"],
+      stylist: ["dashboard"],
+    };
+    const { permissions } = reconcilePermissions(stored, stored.owner);
+    // Reports are owner-only by default, so reception must not gain them.
+    expect(canAccess(permissions, "reception", "reports")).toBe(false);
+  });
+
+  it("leaves deliberate choices alone", () => {
+    const stored = {
+      owner: SCREEN_KEYS.filter((k) => k !== "reports"),
+      // The owner previously took Stock away from reception; that must stick.
+      reception: ["till", "clients"],
+      stylist: ["dashboard"],
+    };
+    const { permissions } = reconcilePermissions(stored, stored.owner);
+    expect(canAccess(permissions, "reception", "stock")).toBe(false);
+  });
+
+  it("does nothing when nothing new has been added", () => {
+    const { permissions, added } = reconcilePermissions(DEFAULT_PERMISSIONS, SCREEN_KEYS);
+    expect(added).toEqual([]);
+    expect(permissions).toBe(DEFAULT_PERMISSIONS);
+  });
+
+  it("reports the current screen list so it can be stored for next time", () => {
+    const { knownKeys } = reconcilePermissions(DEFAULT_PERMISSIONS, ["till"]);
+    expect(knownKeys).toEqual([...SCREEN_KEYS]);
   });
 
   it("does not mutate the permissions it was given", () => {

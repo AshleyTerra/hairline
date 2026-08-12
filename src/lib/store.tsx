@@ -7,6 +7,7 @@ import type { Docket } from "./dockets";
 import type { NewClient } from "./types";
 import {
   DEFAULT_PERMISSIONS,
+  reconcilePermissions,
   defaultUsers,
   type ImportedClient,
   type ManagedUser,
@@ -21,6 +22,8 @@ const USERS_KEY = "hairline-demo-users";
 const PERMS_KEY = "hairline-demo-permissions";
 const IMPORTED_KEY = "hairline-demo-imported-clients";
 const DOCKETS_KEY = "hairline-demo-dockets";
+/** Which screens existed when the permissions were last saved. */
+const SCREENKEYS_KEY = "hairline-demo-screen-keys";
 const NEWCLIENTS_KEY = "hairline-demo-new-clients";
 
 interface DemoState {
@@ -84,6 +87,18 @@ class DemoStore {
         newClients: read<NewClient[]>(NEWCLIENTS_KEY, []),
         hydrated: true,
       };
+
+      // A stored permission list predates any screen added since it was saved,
+      // which would hide the new screen even from the owner. Reconcile on load.
+      const reconciled = reconcilePermissions(
+        this.state.permissions,
+        read<string[]>(SCREENKEYS_KEY, [])
+      );
+      if (reconciled.added.length > 0) {
+        this.state = { ...this.state, permissions: reconciled.permissions };
+        write(PERMS_KEY, reconciled.permissions);
+      }
+      write(SCREENKEYS_KEY, reconciled.knownKeys);
     }
     return this.state;
   };
