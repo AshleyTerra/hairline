@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Card, CardTitle, PageHeader, TableScroll } from "@/components/ui";
-import { PrintableMenu } from "@/components/pricing/PrintableMenu";
+import { MenuBuilder } from "@/components/pricing/MenuBuilder";
 import { ScheduleIncrease } from "@/components/pricing/ScheduleIncrease";
 import { products, serviceDepts, services, tillVendors } from "@/lib/data";
 import { zar } from "@/lib/format";
@@ -201,7 +201,7 @@ export default function PriceMenuPage() {
       )}
 
       {/* ------------------------------------------------------ client menu */}
-      {tab === "menu" && <PrintableMenu />}
+      {tab === "menu" && <MenuBuilder />}
 
       {increase && (
         <ScheduleIncrease

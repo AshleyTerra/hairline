@@ -1,11 +1,10 @@
 "use client";
 
-import { staff } from "@/lib/data";
-import { reportsFrom } from "@/lib/salesSource";
-import { meta } from "@/lib/data";
-import { StaffSelect } from "./StaffSelect";
+import { meta, staff } from "@/lib/data";
+import { catalogueDepts, catalogueItems, reportsFrom } from "@/lib/salesSource";
+import { MultiSelect } from "./MultiSelect";
 
-export type ReportKind = "staffTurnover" | "dailyStaffTurnover";
+export type ReportKind = "staffTurnover" | "dailyStaffTurnover" | "itemTracking";
 
 export const REPORTS: { key: ReportKind; label: string; blurb: string }[] = [
   {
@@ -18,62 +17,58 @@ export const REPORTS: { key: ReportKind; label: string; blurb: string }[] = [
     label: "Daily staff turnover",
     blurb: "One row per trading day for a single staff member.",
   },
+  {
+    key: "itemTracking",
+    label: "Item tracking (product & vendor sales)",
+    blurb: "Every sale of an item: invoice, date, client, staff, department and quantity.",
+  },
 ];
 
-interface ReportCriteriaProps {
+export interface CriteriaState {
   kind: ReportKind;
-  onKind: (kind: ReportKind) => void;
   from: string;
   to: string;
-  onFrom: (date: string) => void;
-  onTo: (date: string) => void;
-  /** Multi-select for the staff report. */
+  /** Staff turnover: who to report on. */
   selected: number[];
-  onSelected: (ids: number[]) => void;
-  /** Single select for the daily report. */
+  /** Daily turnover: which staff member. */
   single: number;
-  onSingle: (id: number) => void;
+  /** Item tracking. */
+  depts: string[];
+  items: string[];
+  stylist: number | null;
+  onlyRetail: boolean;
+}
+
+interface ReportCriteriaProps {
+  state: CriteriaState;
+  onChange: (patch: Partial<CriteriaState>) => void;
   error?: string | null;
 }
 
 /**
- * The criteria bar, following the Reports dialog Karin sent: report type, the
- * dates to report between, and the staff to report on.
+ * The criteria bar, following the Reports and Item Tracking dialogs Karin sent:
+ * report type, the dates to report between, and what to report on.
  */
-export function ReportCriteria({
-  kind,
-  onKind,
-  from,
-  to,
-  onFrom,
-  onTo,
-  selected,
-  onSelected,
-  single,
-  onSingle,
-  error,
-}: ReportCriteriaProps) {
+export function ReportCriteria({ state, onChange, error }: ReportCriteriaProps) {
   const reportable = staff.filter((s) => s.role !== "reception");
-  const multi = kind === "staffTurnover";
-
   const field = "rounded border border-hairline bg-paper px-2.5 py-1.5 text-sm text-ink";
+  const legend =
+    "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-mutedink";
 
   return (
     <div className="no-print mb-4 rounded border border-hairline bg-card">
       <div className="border-b border-hairline-soft px-4 py-3">
         <p className="text-xs text-mutedink">
-          Choose the report, then the dates to report between and the staff to report on.
+          Choose the report, then the dates to report between and what to report on.
         </p>
       </div>
 
       <div className="flex flex-wrap items-start gap-4 px-4 py-4">
         <label className="block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-mutedink">
-            Report
-          </span>
+          <span className={legend}>Report</span>
           <select
-            value={kind}
-            onChange={(e) => onKind(e.target.value as ReportKind)}
+            value={state.kind}
+            onChange={(e) => onChange({ kind: e.target.value as ReportKind })}
             aria-label="Report type"
             className={`${field} min-w-56`}
           >
@@ -86,58 +81,55 @@ export function ReportCriteria({
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-mutedink">
-            Start date
-          </span>
+          <span className={legend}>Start date</span>
           <input
             type="date"
-            value={from}
+            value={state.from}
             min={reportsFrom}
             max={meta.demoDate}
-            onChange={(e) => onFrom(e.target.value)}
+            onChange={(e) => onChange({ from: e.target.value })}
             aria-label="Start date"
             className={field}
           />
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-mutedink">
-            End date
-          </span>
+          <span className={legend}>End date</span>
           <input
             type="date"
-            value={to}
+            value={state.to}
             min={reportsFrom}
             max={meta.demoDate}
-            onChange={(e) => onTo(e.target.value)}
+            onChange={(e) => onChange({ to: e.target.value })}
             aria-label="End date"
             className={field}
           />
         </label>
 
-        {multi ? (
+        {state.kind === "staffTurnover" && (
           <div className="block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-mutedink">
-              Staff
-            </span>
-            <StaffSelect
+            <span className={legend}>Staff</span>
+            <MultiSelect
+              name="Staff"
+              allLabel="All staff"
+              emptyLabel="No staff chosen"
               items={reportable.map((s) => ({
                 id: s.id,
                 label: s.name,
                 note: s.role === "assistant" ? "assistant" : undefined,
               }))}
-              selected={selected}
-              onChange={onSelected}
+              selected={state.selected}
+              onChange={(ids) => onChange({ selected: ids.map(Number) })}
             />
           </div>
-        ) : (
+        )}
+
+        {state.kind === "dailyStaffTurnover" && (
           <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-mutedink">
-              Staff
-            </span>
+            <span className={legend}>Staff</span>
             <select
-              value={single}
-              onChange={(e) => onSingle(Number(e.target.value))}
+              value={state.single}
+              onChange={(e) => onChange({ single: Number(e.target.value) })}
               aria-label="Staff member"
               className={`${field} min-w-56`}
             >
@@ -149,10 +141,73 @@ export function ReportCriteria({
             </select>
           </label>
         )}
+
+        {state.kind === "itemTracking" && (
+          <>
+            <div className="block">
+              <span className={legend}>Departments</span>
+              <MultiSelect
+                name="Departments"
+                allLabel="All departments"
+                emptyMeansAll
+                searchable
+                items={catalogueDepts.map((d) => ({ id: d, label: d }))}
+                selected={state.depts}
+                onChange={(ids) => onChange({ depts: ids.map(String) })}
+              />
+            </div>
+
+            <div className="block">
+              <span className={legend}>Items</span>
+              <MultiSelect
+                name="Items"
+                allLabel="All items"
+                emptyMeansAll
+                searchable
+                items={catalogueItems.map((i) => ({ id: i.name, label: i.name, note: i.dept }))}
+                selected={state.items}
+                onChange={(ids) => onChange({ items: ids.map(String) })}
+              />
+            </div>
+
+            <label className="block">
+              <span className={legend}>Stylist</span>
+              <select
+                value={state.stylist ?? ""}
+                onChange={(e) =>
+                  onChange({ stylist: e.target.value === "" ? null : Number(e.target.value) })
+                }
+                aria-label="Stylist"
+                className={field}
+              >
+                <option value="">All stylists</option>
+                {reportable.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.id} {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex items-end gap-2 pb-1.5 text-sm text-body">
+              <input
+                type="checkbox"
+                checked={state.onlyRetail}
+                onChange={(e) => onChange({ onlyRetail: e.target.checked })}
+                aria-label="Products only"
+                className="h-4 w-4 accent-[#6e6455]"
+              />
+              Products only
+            </label>
+          </>
+        )}
       </div>
 
       {error && (
-        <p role="alert" className="border-t border-hairline-soft bg-crit-soft px-4 py-2 text-xs text-crit">
+        <p
+          role="alert"
+          className="border-t border-hairline-soft bg-crit-soft px-4 py-2 text-xs text-crit"
+        >
           {error}
         </p>
       )}

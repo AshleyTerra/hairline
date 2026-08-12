@@ -1,5 +1,5 @@
-import { daybook, demoday, meta } from "./data";
-import type { ReportLine, ReportSale } from "./reports";
+import { daybook, demoday, meta, products, services } from "./data";
+import type { CatalogueEntry, ReportLine, ReportSale } from "./reports";
 import type { PlayInvoice } from "./types";
 
 /**
@@ -76,6 +76,44 @@ export function salesBetween(from: string, to: string, playInvoices: PlayInvoice
 
 /** The earliest date reports can reach, for date-input limits. */
 export const reportsFrom = daybook.from;
+
+/**
+ * Department and item numbers for each catalogue line, keyed by description,
+ * so an invoice line can be reported the way MySalon numbers it.
+ */
+export const catalogue: ReadonlyMap<string, CatalogueEntry> = (() => {
+  const map = new Map<string, CatalogueEntry>();
+  const pad = (n: number) => String(n).padStart(4, "0");
+  const key = (name: string) => name.trim().toLowerCase();
+
+  for (const s of services) {
+    map.set(key(s.name), {
+      dept: s.dept,
+      deptNo: pad(s.id % 10000),
+      itemNo: pad(s.id),
+      kind: "service",
+    });
+  }
+  for (const p of products.retail) {
+    map.set(key(p.name), { dept: p.dept, deptNo: pad(p.id % 10000), itemNo: pad(p.id), kind: "product" });
+  }
+  for (const p of products.backbar) {
+    map.set(key(p.name), { dept: p.dept, deptNo: pad(p.id % 10000), itemNo: pad(p.id), kind: "stock" });
+  }
+  return map;
+})();
+
+/** Departments that actually appear in the catalogue, for the report filter. */
+export const catalogueDepts = [...new Set([...catalogue.values()].map((c) => c.dept))].sort();
+
+/** Every sellable line description, for the item filter. */
+export const catalogueItems = (() => {
+  const seen = new Map<string, { name: string; dept: string; kind: string }>();
+  for (const s of services) seen.set(s.name, { name: s.name, dept: s.dept, kind: "service" });
+  for (const p of products.retail) seen.set(p.name, { name: p.name, dept: p.dept, kind: "retail" });
+  for (const p of products.backbar) seen.set(p.name, { name: p.name, dept: p.dept, kind: "stock" });
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+})();
 
 export interface PeriodStats {
   total: number;

@@ -2,17 +2,23 @@
 
 import { useMemo, useState } from "react";
 import { PageHeader, Card, TableScroll } from "@/components/ui";
-import { REPORTS, ReportCriteria, type ReportKind } from "@/components/reports/ReportCriteria";
-import { earningStylists, getStaff, meta, staff } from "@/lib/data";
-import { longDate, zar } from "@/lib/format";
 import {
-  downloadTableCsv,
-  downloadXlsx,
-  printReport,
-  reportFilename,
-} from "@/lib/exportFile";
-import { staffTurnover, sumRows, turnoverByDate } from "@/lib/reports";
-import { salesBetween } from "@/lib/salesSource";
+  REPORTS,
+  ReportCriteria,
+  type CriteriaState,
+} from "@/components/reports/ReportCriteria";
+import { earningStylists, getStaff, meta, staff } from "@/lib/data";
+import { longDate, shortDate, zar } from "@/lib/format";
+import { downloadTableCsv, downloadXlsx, printReport, reportFilename } from "@/lib/exportFile";
+import {
+  itemTracking,
+  itemTrackingTotals,
+  staffTurnover,
+  sumRows,
+  turnoverByDate,
+  type LineKind,
+} from "@/lib/reports";
+import { catalogue, salesBetween } from "@/lib/salesSource";
 import { useStore } from "@/lib/store";
 
 /** A fortnight back from the demo day is a sensible default period. */
@@ -29,18 +35,26 @@ const CATEGORIES = [
   { key: "total", label: "Total" },
 ] as const;
 
+const RETAIL_KINDS: LineKind[] = ["product", "stock"];
+
 export default function ReportsPage() {
   const { invoices } = useStore();
-  const [kind, setKind] = useState<ReportKind>("staffTurnover");
-  const [from, setFrom] = useState(defaultFrom);
-  const [to, setTo] = useState(meta.demoDate);
-  const [selected, setSelected] = useState<number[]>(() =>
-    staff.filter((s) => s.role !== "reception").map((s) => s.id)
-  );
-  const [single, setSingle] = useState<number>(earningStylists[0]?.id ?? 1);
+  const [state, setState] = useState<CriteriaState>({
+    kind: "staffTurnover",
+    from: defaultFrom,
+    to: meta.demoDate,
+    selected: staff.filter((s) => s.role !== "reception").map((s) => s.id),
+    single: earningStylists[0]?.id ?? 1,
+    depts: [],
+    items: [],
+    stylist: null,
+    onlyRetail: true,
+  });
+  const patch = (p: Partial<CriteriaState>) => setState((s) => ({ ...s, ...p }));
 
+  const { kind, from, to } = state;
   const badDates = from > to;
-  const noStaff = kind === "staffTurnover" && selected.length === 0;
+  const noStaff = kind === "staffTurnover" && state.selected.length === 0;
   const error = badDates
     ? "The start date is after the end date."
     : noStaff
@@ -53,52 +67,56 @@ export default function ReportsPage() {
   );
 
   const staffRows = useMemo(
-    () => (kind === "staffTurnover" ? staffTurnover(sales, selected) : []),
-    [kind, sales, selected]
+    () => (kind === "staffTurnover" ? staffTurnover(sales, state.selected) : []),
+    [kind, sales, state.selected]
   );
   const dailyRows = useMemo(
-    () => (kind === "dailyStaffTurnover" ? turnoverByDate(sales, single) : []),
-    [kind, sales, single]
+    () => (kind === "dailyStaffTurnover" ? turnoverByDate(sales, state.single) : []),
+    [kind, sales, state.single]
+  );
+  const itemRows = useMemo(
+    () =>
+      kind === "itemTracking"
+        ? itemTracking(sales, catalogue, {
+            depts: state.depts,
+            descrs: state.items,
+            stylistId: state.stylist,
+            kinds: state.onlyRetail ? RETAIL_KINDS : [],
+          })
+        : [],
+    [kind, sales, state.depts, state.items, state.stylist, state.onlyRetail]
   );
 
-  const rows = kind === "staffTurnover" ? staffRows : dailyRows;
-  const totals = useMemo(() => sumRows(rows), [rows]);
+  const turnoverRows = kind === "staffTurnover" ? staffRows : dailyRows;
+  const totals = useMemo(() => sumRows(turnoverRows), [turnoverRows]);
+  const itemTotals = useMemo(() => itemTrackingTotals(itemRows), [itemRows]);
 
   const report = REPORTS.find((r) => r.key === kind);
   const period = from === to ? longDate(from) : `${longDate(from)} to ${longDate(to)}`;
   const subject =
-    kind === "dailyStaffTurnover" ? (getStaff(single)?.name ?? "Staff member") : "All selected staff";
+    kind === "dailyStaffTurnover" ? (getStaff(state.single)?.name ?? "Staff member") : "";
 
-  /** Flat rows for exporting, with the same numbers as the table. */
-  const exportRows = useMemo(
+  // ------------------------------------------------------------- exporting
+  const turnoverExport = useMemo(
     () =>
-      kind === "staffTurnover"
-        ? staffRows.map((r) => ({
-            label: `${r.stylistId} ${getStaff(r.stylistId)?.name ?? ""}`.trim(),
-            servicesEx: r.exVat.services,
-            servicesIncl: r.inclVat.services,
-            retailEx: r.exVat.retail,
-            retailIncl: r.inclVat.retail,
-            stockEx: r.exVat.stock,
-            stockIncl: r.inclVat.stock,
-            totalEx: r.exVat.total,
-            totalIncl: r.inclVat.total,
-          }))
-        : dailyRows.map((r) => ({
-            label: r.date,
-            servicesEx: r.exVat.services,
-            servicesIncl: r.inclVat.services,
-            retailEx: r.exVat.retail,
-            retailIncl: r.inclVat.retail,
-            stockEx: r.exVat.stock,
-            stockIncl: r.inclVat.stock,
-            totalEx: r.exVat.total,
-            totalIncl: r.inclVat.total,
-          })),
+      (kind === "staffTurnover" ? staffRows : dailyRows).map((r) => ({
+        label:
+          "stylistId" in r
+            ? `${r.stylistId} ${getStaff(r.stylistId)?.name ?? ""}`.trim()
+            : r.date,
+        servicesEx: r.exVat.services,
+        servicesIncl: r.inclVat.services,
+        retailEx: r.exVat.retail,
+        retailIncl: r.inclVat.retail,
+        stockEx: r.exVat.stock,
+        stockIncl: r.inclVat.stock,
+        totalEx: r.exVat.total,
+        totalIncl: r.inclVat.total,
+      })),
     [kind, staffRows, dailyRows]
   );
 
-  const exportColumns = [
+  const turnoverColumns = [
     { key: "label" as const, label: kind === "staffTurnover" ? "Staff" : "Date" },
     { key: "servicesEx" as const, label: "Services (excl VAT)" },
     { key: "servicesIncl" as const, label: "Services (incl VAT)" },
@@ -110,7 +128,52 @@ export default function ReportsPage() {
     { key: "totalIncl" as const, label: "Total (incl VAT)" },
   ];
 
-  const slug = kind === "staffTurnover" ? "staff-turnover" : "daily-staff-turnover";
+  const itemExport = useMemo(
+    () =>
+      itemRows.map((r) => ({
+        invoice: r.invoice,
+        date: r.date,
+        client: r.client,
+        staff: getStaff(r.stylistId)?.name ?? "",
+        deptNo: r.deptNo,
+        dept: r.dept,
+        itemNo: r.itemNo,
+        descr: r.descr,
+        qty: r.qty,
+        price: r.price,
+        value: r.value,
+      })),
+    [itemRows]
+  );
+
+  const itemColumns = [
+    { key: "invoice" as const, label: "Invoice No." },
+    { key: "date" as const, label: "Date" },
+    { key: "client" as const, label: "Client" },
+    { key: "staff" as const, label: "Staff" },
+    { key: "deptNo" as const, label: "Dept" },
+    { key: "dept" as const, label: "Department" },
+    { key: "itemNo" as const, label: "Item" },
+    { key: "descr" as const, label: "Description" },
+    { key: "qty" as const, label: "Qty" },
+    { key: "price" as const, label: "Price" },
+    { key: "value" as const, label: "Line value" },
+  ];
+
+  const isItems = kind === "itemTracking";
+  const slug =
+    kind === "staffTurnover"
+      ? "staff-turnover"
+      : kind === "dailyStaffTurnover"
+        ? "daily-staff-turnover"
+        : "item-tracking";
+  const heading = [
+    `${report?.label ?? "Report"} — Hairline`,
+    `${period}${subject ? ` · ${subject}` : ""}`,
+    `Created ${longDate(meta.demoDate)}`,
+  ];
+
+  const rowCount = isItems ? itemRows.length : turnoverRows.length;
 
   return (
     <>
@@ -120,19 +183,7 @@ export default function ReportsPage() {
         subtitle="Built from the same sales the till and cash-up use."
       />
 
-      <ReportCriteria
-        kind={kind}
-        onKind={setKind}
-        from={from}
-        to={to}
-        onFrom={setFrom}
-        onTo={setTo}
-        selected={selected}
-        onSelected={setSelected}
-        single={single}
-        onSingle={setSingle}
-        error={error}
-      />
+      <ReportCriteria state={state} onChange={patch} error={error} />
 
       <div className="no-print mb-4 flex flex-wrap items-center gap-2">
         <button
@@ -147,18 +198,18 @@ export default function ReportsPage() {
           type="button"
           disabled={!!error}
           onClick={() =>
-            downloadXlsx(reportFilename(slug, from, to, "xlsx"), [
-              {
-                name: report?.label ?? "Report",
-                rows: exportRows,
-                columns: exportColumns,
-                heading: [
-                  `${report?.label ?? "Report"} — Hairline`,
-                  `${period}${kind === "dailyStaffTurnover" ? ` · ${subject}` : ""}`,
-                  `Created ${longDate(meta.demoDate)}`,
-                ],
-              },
-            ])
+            isItems
+              ? downloadXlsx(reportFilename(slug, from, to, "xlsx"), [
+                  { name: "Item tracking", rows: itemExport, columns: itemColumns, heading },
+                ])
+              : downloadXlsx(reportFilename(slug, from, to, "xlsx"), [
+                  {
+                    name: report?.label ?? "Report",
+                    rows: turnoverExport,
+                    columns: turnoverColumns,
+                    heading,
+                  },
+                ])
           }
           className="rounded border border-taupe px-4 py-2 text-sm font-semibold text-taupe-deep hover:bg-chip disabled:opacity-40"
         >
@@ -168,13 +219,20 @@ export default function ReportsPage() {
           type="button"
           disabled={!!error}
           onClick={() =>
-            downloadTableCsv(reportFilename(slug, from, to, "csv"), exportRows, exportColumns)
+            isItems
+              ? downloadTableCsv(reportFilename(slug, from, to, "csv"), itemExport, itemColumns)
+              : downloadTableCsv(
+                  reportFilename(slug, from, to, "csv"),
+                  turnoverExport,
+                  turnoverColumns
+                )
           }
           className="rounded border border-hairline px-4 py-2 text-sm font-semibold text-mutedink hover:text-ink disabled:opacity-40"
         >
           CSV
         </button>
         <p className="ml-auto text-xs text-mutedink">
+          {rowCount.toLocaleString("en-ZA")} {isItems ? "lines" : "rows"} ·{" "}
           {sales.length.toLocaleString("en-ZA")} sales in this period
         </p>
       </div>
@@ -184,7 +242,7 @@ export default function ReportsPage() {
         <header className="border-b border-hairline px-4 py-3">
           <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-ink">
             {report?.label}
-            {kind === "dailyStaffTurnover" ? ` — ${subject}` : ""}
+            {subject ? ` — ${subject}` : ""}
           </h2>
           <p className="text-xs text-mutedink">
             Hairline · {period} · created {longDate(meta.demoDate)}
@@ -192,84 +250,155 @@ export default function ReportsPage() {
         </header>
 
         <TableScroll>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-hairline text-[11px] uppercase tracking-[0.06em] text-mutedink">
-                <th className="px-4 py-2.5 text-left font-semibold">
-                  {kind === "staffTurnover" ? "Staff" : "Date"}
-                </th>
-                {CATEGORIES.map((c) => (
-                  <th key={c.key} colSpan={2} className="px-4 py-2.5 text-center font-semibold">
-                    {c.label}
-                  </th>
-                ))}
-              </tr>
-              <tr className="border-b border-hairline text-[10px] uppercase tracking-[0.06em] text-mutedink">
-                <th />
-                {CATEGORIES.flatMap((c) => [
-                  <th key={`${c.key}-ex`} className="px-4 py-1.5 text-right font-normal">
-                    excl VAT
-                  </th>,
-                  <th key={`${c.key}-in`} className="px-4 py-1.5 text-right font-normal">
-                    incl VAT
-                  </th>,
-                ])}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-mutedink">
-                    {error ?? "No sales in this period."}
-                  </td>
+          {isItems ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-hairline text-left text-[11px] uppercase tracking-[0.06em] text-mutedink">
+                  <th className="px-3 py-2.5 font-semibold">Invoice</th>
+                  <th className="px-3 py-2.5 font-semibold">Date</th>
+                  <th className="px-3 py-2.5 font-semibold">Client</th>
+                  <th className="px-3 py-2.5 font-semibold">Staff</th>
+                  <th className="px-3 py-2.5 font-semibold">Dept</th>
+                  <th className="px-3 py-2.5 font-semibold">Department</th>
+                  <th className="px-3 py-2.5 font-semibold">Item</th>
+                  <th className="px-3 py-2.5 font-semibold">Description</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Qty</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Price</th>
                 </tr>
-              ) : (
-                rows.map((r) => {
-                  const label =
-                    "stylistId" in r
-                      ? `${r.stylistId} ${getStaff(r.stylistId)?.name ?? ""}`.trim()
-                      : longDate(r.date);
-                  return (
+              </thead>
+              <tbody>
+                {itemRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="px-4 py-10 text-center text-mutedink">
+                      {error ?? "Nothing sold matches these criteria."}
+                    </td>
+                  </tr>
+                ) : (
+                  itemRows.slice(0, 400).map((r, i) => (
                     <tr
-                      key={"stylistId" in r ? r.stylistId : r.date}
+                      key={`${r.invoice}-${r.itemNo}-${i}`}
                       className="border-b border-hairline-soft last:border-0"
                     >
-                      <td className="px-4 py-2 text-ink">{label}</td>
-                      {CATEGORIES.flatMap((c) => [
-                        <td key={`${c.key}-ex`} className="tnum px-4 py-2 text-right text-mutedink">
-                          {zar(r.exVat[c.key])}
-                        </td>,
-                        <td
-                          key={`${c.key}-in`}
-                          className={`tnum px-4 py-2 text-right ${
-                            c.key === "total" ? "font-semibold text-ink" : "text-ink"
-                          }`}
-                        >
-                          {zar(r.inclVat[c.key])}
-                        </td>,
-                      ])}
+                      <td className="tnum px-3 py-2 text-mutedink">{r.invoice}</td>
+                      <td className="px-3 py-2 text-mutedink">{shortDate(r.date)}</td>
+                      <td className="px-3 py-2 text-ink">{r.client}</td>
+                      <td className="px-3 py-2 text-mutedink">
+                        {getStaff(r.stylistId)?.name ?? "—"}
+                      </td>
+                      <td className="tnum px-3 py-2 text-mutedink">{r.deptNo}</td>
+                      <td className="px-3 py-2 text-mutedink">{r.dept}</td>
+                      <td className="tnum px-3 py-2 text-mutedink">{r.itemNo}</td>
+                      <td className="px-3 py-2 text-ink">{r.descr}</td>
+                      <td className="tnum px-3 py-2 text-right text-ink">{r.qty}</td>
+                      <td className="tnum px-3 py-2 text-right font-semibold text-ink">
+                        {zar(r.value)}
+                      </td>
                     </tr>
-                  );
-                })
+                  ))
+                )}
+              </tbody>
+              {itemRows.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-hairline font-semibold text-ink">
+                    <td className="px-3 py-2.5" colSpan={8}>
+                      Total · {itemRows.length.toLocaleString("en-ZA")} lines
+                    </td>
+                    <td className="tnum px-3 py-2.5 text-right">{itemTotals.qty}</td>
+                    <td className="tnum px-3 py-2.5 text-right">{zar(itemTotals.value)}</td>
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {rows.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 border-hairline font-semibold text-ink">
-                  <td className="px-4 py-2.5">Total</td>
+            </table>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-hairline text-[11px] uppercase tracking-[0.06em] text-mutedink">
+                  <th className="px-4 py-2.5 text-left font-semibold">
+                    {kind === "staffTurnover" ? "Staff" : "Date"}
+                  </th>
+                  {CATEGORIES.map((c) => (
+                    <th key={c.key} colSpan={2} className="px-4 py-2.5 text-center font-semibold">
+                      {c.label}
+                    </th>
+                  ))}
+                </tr>
+                <tr className="border-b border-hairline text-[10px] uppercase tracking-[0.06em] text-mutedink">
+                  <th />
                   {CATEGORIES.flatMap((c) => [
-                    <td key={`${c.key}-ex`} className="tnum px-4 py-2.5 text-right">
-                      {zar(totals.exVat[c.key])}
-                    </td>,
-                    <td key={`${c.key}-in`} className="tnum px-4 py-2.5 text-right">
-                      {zar(totals.inclVat[c.key])}
-                    </td>,
+                    <th key={`${c.key}-ex`} className="px-4 py-1.5 text-right font-normal">
+                      excl VAT
+                    </th>,
+                    <th key={`${c.key}-in`} className="px-4 py-1.5 text-right font-normal">
+                      incl VAT
+                    </th>,
                   ])}
                 </tr>
-              </tfoot>
-            )}
-          </table>
+              </thead>
+              <tbody>
+                {turnoverRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-10 text-center text-mutedink">
+                      {error ?? "No sales in this period."}
+                    </td>
+                  </tr>
+                ) : (
+                  turnoverRows.map((r) => {
+                    const label =
+                      "stylistId" in r
+                        ? `${r.stylistId} ${getStaff(r.stylistId)?.name ?? ""}`.trim()
+                        : longDate(r.date);
+                    return (
+                      <tr
+                        key={"stylistId" in r ? r.stylistId : r.date}
+                        className="border-b border-hairline-soft last:border-0"
+                      >
+                        <td className="px-4 py-2 text-ink">{label}</td>
+                        {CATEGORIES.flatMap((c) => [
+                          <td
+                            key={`${c.key}-ex`}
+                            className="tnum px-4 py-2 text-right text-mutedink"
+                          >
+                            {zar(r.exVat[c.key])}
+                          </td>,
+                          <td
+                            key={`${c.key}-in`}
+                            className={`tnum px-4 py-2 text-right ${
+                              c.key === "total" ? "font-semibold text-ink" : "text-ink"
+                            }`}
+                          >
+                            {zar(r.inclVat[c.key])}
+                          </td>,
+                        ])}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+              {turnoverRows.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-hairline font-semibold text-ink">
+                    <td className="px-4 py-2.5">Total</td>
+                    {CATEGORIES.flatMap((c) => [
+                      <td key={`${c.key}-ex`} className="tnum px-4 py-2.5 text-right">
+                        {zar(totals.exVat[c.key])}
+                      </td>,
+                      <td key={`${c.key}-in`} className="tnum px-4 py-2.5 text-right">
+                        {zar(totals.inclVat[c.key])}
+                      </td>,
+                    ])}
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          )}
         </TableScroll>
+
+        {isItems && itemRows.length > 400 && (
+          <p className="no-print border-t border-hairline-soft px-4 py-2 text-xs text-mutedink">
+            Showing the first 400 of {itemRows.length.toLocaleString("en-ZA")} lines on screen. The
+            Excel and CSV exports contain every line.
+          </p>
+        )}
       </Card>
     </>
   );

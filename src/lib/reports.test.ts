@@ -3,9 +3,12 @@ import {
   addRow,
   emptySplit,
   exVat,
+  itemTracking,
+  itemTrackingTotals,
   splitTotals,
   staffTurnover,
   turnoverByDate,
+  type CatalogueEntry,
   type ReportSale,
 } from "./reports";
 
@@ -118,6 +121,104 @@ describe("staff turnover, one row per staff member", () => {
 
   it("sorts biggest earner first", () => {
     expect(staffTurnover(SALES, [1, 2]).map((r) => r.stylistId)).toEqual([1, 2]);
+  });
+});
+
+describe("item tracking", () => {
+  const catalogue = new Map<string, CatalogueEntry>([
+    ["cut", { dept: "General", deptNo: "0001", itemNo: "0001", kind: "service" }],
+    ["shampoo", { dept: "Schwarzkopf Retail", deptNo: "0024", itemNo: "0007", kind: "product" }],
+    ["tint 20g", { dept: "Schwarzkopf Stock", deptNo: "0025", itemNo: "0015", kind: "stock" }],
+  ]);
+
+  const SALES2: ReportSale[] = [
+    sale({
+      number: 900,
+      date: "2026-07-01",
+      client: "Thandi",
+      lines: [
+        { descr: "Cut", qty: 1, price: 600, disc: 0, stylistId: 1, kind: "service" },
+        { descr: "Shampoo", qty: 2, price: 200, disc: 0, stylistId: 1, kind: "product" },
+      ],
+    }),
+    sale({
+      number: 901,
+      date: "2026-07-02",
+      client: "Sipho",
+      lines: [{ descr: "Tint 20g", qty: 1, price: 90, disc: 0, stylistId: 2, kind: "stock" }],
+    }),
+  ];
+
+  it("gives one row per line with the invoice, client and quantity", () => {
+    const rows = itemTracking(SALES2, catalogue, { kinds: [] });
+    expect(rows).toHaveLength(3);
+    const shampoo = rows.find((r) => r.descr === "Shampoo");
+    expect(shampoo).toMatchObject({ invoice: 900, client: "Thandi", qty: 2, value: 400 });
+  });
+
+  it("fills in the department and item numbers from the catalogue", () => {
+    const rows = itemTracking(SALES2, catalogue, { kinds: [] });
+    const cut = rows.find((r) => r.descr === "Cut");
+    expect(cut?.dept).toBe("General");
+    expect(cut?.deptNo).toBe("0001");
+    expect(cut?.itemNo).toBe("0001");
+  });
+
+  it("marks an item missing from the catalogue rather than dropping it", () => {
+    const odd: ReportSale[] = [
+      sale({
+        date: "2026-07-03",
+        lines: [{ descr: "Mystery item", qty: 1, price: 10, disc: 0, stylistId: 1, kind: "product" }],
+      }),
+    ];
+    const rows = itemTracking(odd, catalogue, { kinds: [] });
+    expect(rows[0].dept).toBe("Unknown");
+  });
+
+  it("defaults to retail and salon stock only", () => {
+    const rows = itemTracking(SALES2, catalogue, { kinds: ["product", "stock"] });
+    expect(rows.map((r) => r.descr).sort()).toEqual(["Shampoo", "Tint 20g"]);
+  });
+
+  it("filters to one product", () => {
+    const rows = itemTracking(SALES2, catalogue, { descrs: ["Shampoo"], kinds: [] });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].descr).toBe("Shampoo");
+  });
+
+  it("filters by department", () => {
+    const rows = itemTracking(SALES2, catalogue, { depts: ["Schwarzkopf Stock"], kinds: [] });
+    expect(rows.map((r) => r.descr)).toEqual(["Tint 20g"]);
+  });
+
+  it("filters by stylist", () => {
+    const rows = itemTracking(SALES2, catalogue, { stylistId: 2, kinds: [] });
+    expect(rows.every((r) => r.stylistId === 2)).toBe(true);
+  });
+
+  it("applies quantity and discount to the line value", () => {
+    const discounted: ReportSale[] = [
+      sale({
+        date: "2026-07-04",
+        lines: [{ descr: "Shampoo", qty: 2, price: 200, disc: 50, stylistId: 1, kind: "product" }],
+      }),
+    ];
+    expect(itemTracking(discounted, catalogue, { kinds: [] })[0].value).toBe(200);
+  });
+
+  it("lists the most recent day first", () => {
+    const rows = itemTracking(SALES2, catalogue, { kinds: [] });
+    expect(rows[0].date).toBe("2026-07-02");
+  });
+
+  it("totals the quantity and value", () => {
+    const totals = itemTrackingTotals(itemTracking(SALES2, catalogue, { kinds: [] }));
+    expect(totals.qty).toBe(4);
+    expect(totals.value).toBe(600 + 400 + 90);
+  });
+
+  it("returns nothing when the filters exclude everything", () => {
+    expect(itemTracking(SALES2, catalogue, { descrs: ["Nothing"], kinds: [] })).toEqual([]);
   });
 });
 

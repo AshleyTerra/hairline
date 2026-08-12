@@ -4,6 +4,9 @@ import { useCallback, useMemo, useSyncExternalStore, type ReactNode } from "reac
 import type { PlayInvoice, Role } from "./types";
 import { type SignedInUser } from "./auth";
 import type { Docket } from "./dockets";
+import { DEFAULT_DESIGNATIONS, type StaffRecord } from "./staffAdmin";
+import type { StockDraft } from "./stockAdmin";
+import staffData from "@/data/staff.json";
 import type { NewClient } from "./types";
 import {
   DEFAULT_PERMISSIONS,
@@ -24,6 +27,10 @@ const IMPORTED_KEY = "hairline-demo-imported-clients";
 const DOCKETS_KEY = "hairline-demo-dockets";
 /** Which screens existed when the permissions were last saved. */
 const SCREENKEYS_KEY = "hairline-demo-screen-keys";
+const STAFFREC_KEY = "hairline-demo-staff-records";
+const DESIGNATIONS_KEY = "hairline-demo-designations";
+const ARCHIVED_KEY = "hairline-demo-archived-stock";
+const NEWSTOCK_KEY = "hairline-demo-new-stock";
 const NEWCLIENTS_KEY = "hairline-demo-new-clients";
 
 interface DemoState {
@@ -38,6 +45,13 @@ interface DemoState {
   dockets: Docket[];
   /** Clients added at the till during the demo. */
   newClients: NewClient[];
+  /** Editable staff records, seeded from the migrated staff file. */
+  staffRecords: StaffRecord[];
+  designations: string[];
+  /** Stock ids hidden from selection, history untouched. */
+  archivedStock: number[];
+  /** Stock lines added or imported during the demo. */
+  newStock: StockDraft[];
   /** False until the client has read localStorage, so the shell can hold back. */
   hydrated: boolean;
 }
@@ -52,8 +66,26 @@ const SERVER_STATE: DemoState = {
   importedClients: [],
   dockets: [],
   newClients: [],
+  staffRecords: seedStaffRecords(),
+  designations: [...DEFAULT_DESIGNATIONS],
+  archivedStock: [],
+  newStock: [],
   hydrated: false,
 };
+
+/** Turns the migrated staff file into editable records. */
+function seedStaffRecords(): StaffRecord[] {
+  const designationFor = (role: string) =>
+    role === "assistant" ? "Assistant" : role === "reception" ? "Reception" : "Stylist";
+  return staffData.map((s) => ({
+    id: s.id,
+    name: s.name,
+    designation: designationFor(s.role),
+    email: "",
+    tel: "",
+    active: true,
+  }));
+}
 
 /**
  * The demo's state lives outside React in a tiny observable store, read through
@@ -85,6 +117,10 @@ class DemoStore {
         importedClients: read<ImportedClient[]>(IMPORTED_KEY, []),
         dockets: read<Docket[]>(DOCKETS_KEY, []),
         newClients: read<NewClient[]>(NEWCLIENTS_KEY, []),
+        staffRecords: read<StaffRecord[]>(STAFFREC_KEY, seedStaffRecords()),
+        designations: read<string[]>(DESIGNATIONS_KEY, [...DEFAULT_DESIGNATIONS]),
+        archivedStock: read<number[]>(ARCHIVED_KEY, []),
+        newStock: read<StockDraft[]>(NEWSTOCK_KEY, []),
         hydrated: true,
       };
 
@@ -175,6 +211,32 @@ class DemoStore {
     return created;
   }
 
+  setStaffRecords(staffRecords: StaffRecord[]) {
+    write(STAFFREC_KEY, staffRecords);
+    this.set({ staffRecords });
+  }
+
+  setDesignations(designations: string[]) {
+    write(DESIGNATIONS_KEY, designations);
+    this.set({ designations });
+  }
+
+  setArchivedStock(archivedStock: number[]) {
+    write(ARCHIVED_KEY, archivedStock);
+    this.set({ archivedStock });
+  }
+
+  addStock(lines: StockDraft[]) {
+    const newStock = [...this.getSnapshot().newStock, ...lines];
+    write(NEWSTOCK_KEY, newStock);
+    this.set({ newStock });
+  }
+
+  clearNewStock() {
+    write(NEWSTOCK_KEY, []);
+    this.set({ newStock: [] });
+  }
+
   setUsers(users: ManagedUser[]) {
     write(USERS_KEY, users);
     this.set({ users });
@@ -204,6 +266,10 @@ class DemoStore {
     write(IMPORTED_KEY, []);
     write(DOCKETS_KEY, []);
     write(NEWCLIENTS_KEY, []);
+    write(STAFFREC_KEY, seedStaffRecords());
+    write(DESIGNATIONS_KEY, [...DEFAULT_DESIGNATIONS]);
+    write(ARCHIVED_KEY, []);
+    write(NEWSTOCK_KEY, []);
     this.set({
       invoices: [],
       users: defaultUsers(),
@@ -211,6 +277,10 @@ class DemoStore {
       importedClients: [],
       dockets: [],
       newClients: [],
+      staffRecords: seedStaffRecords(),
+      designations: [...DEFAULT_DESIGNATIONS],
+      archivedStock: [],
+      newStock: [],
     });
   }
 }
@@ -273,6 +343,11 @@ export function useStore() {
   );
   const clearImportedClients = useCallback(() => store.clearImportedClients(), []);
   const resetDemo = useCallback(() => store.resetDemo(), []);
+  const setStaffRecords = useCallback((r: StaffRecord[]) => store.setStaffRecords(r), []);
+  const setDesignations = useCallback((d: string[]) => store.setDesignations(d), []);
+  const setArchivedStock = useCallback((ids: number[]) => store.setArchivedStock(ids), []);
+  const addStock = useCallback((lines: StockDraft[]) => store.addStock(lines), []);
+  const clearNewStock = useCallback(() => store.clearNewStock(), []);
   const setDockets = useCallback((d: Docket[]) => store.setDockets(d), []);
   const addClient = useCallback(
     (input: Omit<NewClient, "id">) => store.addClient(input),
@@ -290,6 +365,10 @@ export function useStore() {
       importedClients: state.importedClients,
       dockets: state.dockets,
       newClients: state.newClients,
+      staffRecords: state.staffRecords,
+      designations: state.designations,
+      archivedStock: state.archivedStock,
+      newStock: state.newStock,
       hydrated: state.hydrated,
       signIn,
       signOut,
@@ -304,8 +383,13 @@ export function useStore() {
       resetDemo,
       setDockets,
       addClient,
+      setStaffRecords,
+      setDesignations,
+      setArchivedStock,
+      addStock,
+      clearNewStock,
     }),
     [state, signIn, signOut, setRole, setStylistId, addInvoice, clearInvoices, setUsers,
-     setPermissions, addImportedClients, clearImportedClients, resetDemo, setDockets, addClient]
+     setPermissions, addImportedClients, clearImportedClients, resetDemo, setDockets, addClient, setStaffRecords, setDesignations, setArchivedStock, addStock, clearNewStock]
   );
 }

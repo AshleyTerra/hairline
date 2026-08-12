@@ -128,6 +128,99 @@ export function turnoverByDate(
     .map(([date, inclVat]) => ({ date, inclVat, exVat: asExVat(inclVat) }));
 }
 
+// ------------------------------------------------------- item tracking
+
+/** What the catalogue knows about a line, looked up by its description. */
+export interface CatalogueEntry {
+  dept: string;
+  deptNo: string;
+  itemNo: string;
+  kind: LineKind;
+}
+
+export interface ItemTrackingRow {
+  invoice: number;
+  date: string;
+  client: string;
+  stylistId: number;
+  deptNo: string;
+  dept: string;
+  itemNo: string;
+  descr: string;
+  qty: number;
+  price: number;
+  value: number;
+}
+
+export interface ItemTrackingFilter {
+  /** Empty means every department. */
+  depts?: readonly string[];
+  /** Empty means every item. */
+  descrs?: readonly string[];
+  /** Null means every stylist. */
+  stylistId?: number | null;
+  /** Which kinds to include; defaults to retail and salon stock. */
+  kinds?: readonly LineKind[];
+}
+
+/**
+ * Every line matching the filter, one row per line — the shape of MySalon's
+ * Item Tracking report: invoice, date, client, staff, department, item and
+ * quantity.
+ */
+export function itemTracking(
+  sales: readonly ReportSale[],
+  catalogue: ReadonlyMap<string, CatalogueEntry>,
+  filter: ItemTrackingFilter = {}
+): ItemTrackingRow[] {
+  const wantDept = new Set(filter.depts ?? []);
+  const wantDescr = new Set(filter.descrs ?? []);
+  const wantKind = new Set(filter.kinds ?? []);
+  const rows: ItemTrackingRow[] = [];
+
+  for (const sale of sales) {
+    for (const line of sale.lines) {
+      const info = catalogue.get(line.descr.trim().toLowerCase());
+      const dept = info?.dept ?? "Unknown";
+      const kind = info?.kind ?? line.kind;
+
+      if (wantKind.size > 0 && !wantKind.has(kind)) continue;
+      if (wantDept.size > 0 && !wantDept.has(dept)) continue;
+      if (wantDescr.size > 0 && !wantDescr.has(line.descr)) continue;
+      if (filter.stylistId != null && line.stylistId !== filter.stylistId) continue;
+
+      rows.push({
+        invoice: sale.number,
+        date: sale.date.slice(0, 10),
+        client: sale.client,
+        stylistId: line.stylistId,
+        deptNo: info?.deptNo ?? "—",
+        dept,
+        itemNo: info?.itemNo ?? "—",
+        descr: line.descr,
+        qty: line.qty,
+        price: line.price,
+        value: lineValue(line),
+      });
+    }
+  }
+
+  return rows.sort(
+    (a, b) => b.date.localeCompare(a.date) || a.invoice - b.invoice || a.descr.localeCompare(b.descr)
+  );
+}
+
+/** Totals for the foot of an item-tracking report. */
+export function itemTrackingTotals(rows: readonly ItemTrackingRow[]): {
+  qty: number;
+  value: number;
+} {
+  return {
+    qty: rows.reduce((n, r) => n + r.qty, 0),
+    value: round(rows.reduce((n, r) => n + r.value, 0)),
+  };
+}
+
 /** Column totals for the bottom of a report. */
 export function sumRows(rows: readonly { inclVat: Split; exVat: Split }[]): {
   inclVat: Split;

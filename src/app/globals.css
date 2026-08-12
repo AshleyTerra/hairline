@@ -99,6 +99,19 @@ body {
   .tnum {
     font-variant-numeric: tabular-nums;
   }
+
+  /* The client menu is a tri-fold: three columns across a landscape sheet. */
+  .menu-sheet {
+    font-size: 9.5pt;
+  }
+  .menu-sheet .grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 10mm !important;
+  }
+  .menu-sheet section {
+    break-inside: avoid;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

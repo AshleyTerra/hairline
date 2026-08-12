@@ -7,10 +7,12 @@ import { PermissionsPanel } from "@/components/admin/PermissionsPanel";
 import { ExportPanel } from "@/components/admin/ExportPanel";
 import { ImportClientsPanel } from "@/components/admin/ImportClientsPanel";
 import { RestorePanel } from "@/components/admin/RestorePanel";
+import { StaffPanel } from "@/components/admin/StaffPanel";
+import { StockAdminPanel } from "@/components/admin/StockAdminPanel";
 import { canAccess } from "@/lib/admin";
 import { useStore } from "@/lib/store";
 
-type Tab = "users" | "permissions" | "export" | "import" | "restore";
+type Tab = "users" | "permissions" | "export" | "import" | "restore" | "staff" | "stock";
 
 interface TabDef {
   key: Tab;
@@ -22,7 +24,9 @@ interface TabDef {
 const TABS: TabDef[] = [
   { key: "export", label: "Export data" },
   { key: "import", label: "Load clients" },
+  { key: "stock", label: "Stock lines" },
   { key: "restore", label: "MySalon backup" },
+  { key: "staff", label: "Staff", ownerOnly: true },
   { key: "users", label: "Users", ownerOnly: true },
   { key: "permissions", label: "Roles & screens", ownerOnly: true },
 ];
@@ -117,6 +121,8 @@ export default function AdminPage() {
       {active === "export" && <ExportPanel />}
       {active === "import" && <ImportClientsPanel />}
       {active === "restore" && <RestorePanel />}
+      {active === "staff" && <StaffPanel />}
+      {active === "stock" && <StockAdminPanel />}
       {active === "users" && <UsersPanel />}
       {active === "permissions" && <PermissionsPanel />}
     </>
