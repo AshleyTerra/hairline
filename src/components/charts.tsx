@@ -88,7 +88,8 @@ export function ColumnChart({
           const y = padTop + plot - h;
           const active = hover === i;
           return (
-            <g key={d.label} clipPath={`url(#${clipId})`}>
+            /* Keyed by slot, not label: a thirteen-month window has two Julys. */
+            <g key={i} clipPath={`url(#${clipId})`}>
               {/* 4px rounded data-end, square at the baseline */}
               <path
                 d={`M${x},${padTop + plot} L${x},${y + 3} Q${x},${y} ${x + 3},${y} L${x + barWidth - 3},${y} Q${x + barWidth},${y} ${x + barWidth},${y + 3} L${x + barWidth},${padTop + plot} Z`}
@@ -113,7 +114,7 @@ export function ColumnChart({
       <div className="flex" aria-hidden="true">
         {data.map((d, i) => (
           <span
-            key={d.label}
+            key={i}
             className="min-w-0 flex-1 truncate text-center text-[10px]"
             style={{ color: AXIS_TEXT }}
           >
