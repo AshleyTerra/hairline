@@ -3,6 +3,7 @@
 import { staff } from "@/lib/data";
 import { reportsFrom } from "@/lib/salesSource";
 import { meta } from "@/lib/data";
+import { StaffSelect } from "./StaffSelect";
 
 export type ReportKind = "staffTurnover" | "dailyStaffTurnover";
 
@@ -115,54 +116,19 @@ export function ReportCriteria({
         </label>
 
         {multi ? (
-          <div className="min-w-64">
-            <div className="mb-1 flex items-center justify-between gap-3">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mutedink">
-                Staff
-              </span>
-              <span className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => onSelected(reportable.map((s) => s.id))}
-                  className="text-[11px] font-semibold text-taupe-deep underline underline-offset-2"
-                >
-                  Select all
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onSelected([])}
-                  className="text-[11px] font-semibold text-mutedink underline underline-offset-2"
-                >
-                  Deselect all
-                </button>
-              </span>
-            </div>
-            <ul className="max-h-40 overflow-y-auto rounded border border-hairline bg-paper px-2 py-1.5">
-              {reportable.map((s) => (
-                <li key={s.id}>
-                  <label className="flex items-center gap-2 py-0.5 text-sm text-body">
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(s.id)}
-                      onChange={(e) =>
-                        onSelected(
-                          e.target.checked
-                            ? [...selected, s.id]
-                            : selected.filter((id) => id !== s.id)
-                        )
-                      }
-                      aria-label={s.name}
-                      className="h-3.5 w-3.5 accent-[#6e6455]"
-                    />
-                    <span className="tnum text-mutedink">{s.id}</span>
-                    {s.name}
-                    {s.role === "assistant" && (
-                      <span className="text-[11px] text-mutedink">(assistant)</span>
-                    )}
-                  </label>
-                </li>
-              ))}
-            </ul>
+          <div className="block">
+            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-mutedink">
+              Staff
+            </span>
+            <StaffSelect
+              items={reportable.map((s) => ({
+                id: s.id,
+                label: s.name,
+                note: s.role === "assistant" ? "assistant" : undefined,
+              }))}
+              selected={selected}
+              onChange={onSelected}
+            />
           </div>
         ) : (
           <label className="block">
