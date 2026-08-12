@@ -1,4 +1,4 @@
-import { daybook, demoday, meta, products, services } from "./data";
+import { analytics, daybook, demoday, meta, products, services } from "./data";
 import type { CatalogueEntry, ReportLine, ReportSale } from "./reports";
 import type { PlayInvoice } from "./types";
 
@@ -118,18 +118,62 @@ export const catalogueItems = (() => {
 export interface PeriodStats {
   total: number;
   count: number;
+  /** As a percentage, 0–100. */
   cardShare: number;
   cashShare: number;
   days: number;
+  /**
+   * Where the figures came from. The day book carries payments, so it can split
+   * card from cash; the yearly and monthly aggregates cannot, and fall back to
+   * the salon's twelve-month average.
+   */
+  source: "daybook" | "months" | "years";
 }
 
 /**
  * Headline figures for any date or range, so the dashboard is not stuck on the
  * demo day. Uses invoice totals and payments, which is what the till records.
  */
+/** Earliest month and year the aggregates cover. */
+export const monthsFrom = analytics.revenueByMonth[0]?.ym ?? daybook.from.slice(0, 7);
+export const yearsFrom = analytics.revenueByYear[0]?.year ?? 2015;
+
 export function periodStats(from: string, to: string, playInvoices: PlayInvoice[]): PeriodStats {
   const lo = from <= to ? from : to;
   const hi = from <= to ? to : from;
+
+  // Outside the day book, fall back to the monthly or yearly aggregates so a
+  // month or year selection still shows real figures.
+  if (lo < daybook.from) {
+    const cardShare = analytics.paymentMix.cardShare;
+    const cashShare = analytics.paymentMix.cashShare;
+
+    if (lo.slice(0, 7) >= monthsFrom) {
+      const months = analytics.revenueByMonth.filter(
+        (m) => m.ym >= lo.slice(0, 7) && m.ym <= hi.slice(0, 7)
+      );
+      return {
+        total: Math.round(months.reduce((n, m) => n + m.revenue, 0) * 100) / 100,
+        count: months.reduce((n, m) => n + m.invoices, 0),
+        cardShare,
+        cashShare,
+        days: months.length,
+        source: "months",
+      };
+    }
+
+    const years = analytics.revenueByYear.filter(
+      (y) => y.year >= Number(lo.slice(0, 4)) && y.year <= Number(hi.slice(0, 4))
+    );
+    return {
+      total: Math.round(years.reduce((n, y) => n + y.revenue, 0) * 100) / 100,
+      count: years.reduce((n, y) => n + y.invoices, 0),
+      cardShare,
+      cashShare,
+      days: years.length,
+      source: "years",
+    };
+  }
 
   let total = 0;
   let count = 0;
@@ -175,8 +219,10 @@ export function periodStats(from: string, to: string, playInvoices: PlayInvoice[
   return {
     total: Math.round(total * 100) / 100,
     count,
-    cardShare: card / paid,
-    cashShare: cash / paid,
+    // Percentages, matching how the rest of the app reports shares.
+    cardShare: (card / paid) * 100,
+    cashShare: (cash / paid) * 100,
     days: days.size,
+    source: "daybook",
   };
 }
