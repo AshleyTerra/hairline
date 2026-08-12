@@ -676,7 +676,8 @@ for (const row of rawInvoices) {
       s: num(row.stylistId),
       v: money(row.total),
       i: 0,
-      // [descriptionIndex, qty, unitPrice, discountPercent, stylistId]
+      // [descriptionIndex, qty, unitPrice, discountPercent, stylistId, kind]
+      // kind: 0 = service, 1 = retail, 2 = salon stock item
       L: [],
       // Only the methods actually used, e.g. [["card", 780]]
       p: [
@@ -690,7 +691,15 @@ for (const row of rawInvoices) {
     invoiceIndex.set(row.id, inv);
   }
   inv.i += 1;
-  inv.L.push([descrId(row.descr), num(row.qty) || 1, money(row.price), num(row.disc), num(row.stylistId)]);
+  const kindCode = row.kind === "R" ? 1 : row.kind === "Stock Item" ? 2 : 0;
+  inv.L.push([
+    descrId(row.descr),
+    num(row.qty) || 1,
+    money(row.price),
+    num(row.disc),
+    num(row.stylistId),
+    kindCode,
+  ]);
 }
 
 const daybook = {};

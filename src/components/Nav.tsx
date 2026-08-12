@@ -17,6 +17,7 @@ const ICONS: Record<string, string> = {
   staff: "M9 11a3 3 0 100-6 3 3 0 000 6zM2 20a7 7 0 0114 0M17 11a3 3 0 100-6M17 14a6 6 0 015 6",
   cashup: "M3 7h18v10H3zM12 14a2 2 0 100-4 2 2 0 000 4z",
   pricing: "M4 4h10l6 6-10 10-6-6zM9 9h.01",
+  reports: "M5 3h11l3 3v15H5zM9 12h6M9 16h6M9 8h3",
   admin: "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-2.9 1.2v.2a2 2 0 11-4 0v-.1a1.7 1.7 0 00-2.9-1.2l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00-1.2-2.9H3a2 2 0 110-4h.1A1.7 1.7 0 004.3 6l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 002.9-1.2V2a2 2 0 114 0v.1a1.7 1.7 0 002.9 1.2l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 001.2 2.9H22a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z",
 };
 
@@ -53,12 +54,8 @@ export function Nav() {
       {/* Desktop icon rail — a counter-friendly 78px instead of a labelled sidebar.
           Pinned to the viewport so it stays put while the page scrolls. */}
       <aside className="no-print sticky top-0 hidden h-screen w-[78px] shrink-0 flex-col items-center gap-1.5 overflow-y-auto bg-ink pb-4 pt-[18px] md:flex">
-        <Link
-          href="/"
-          className="mb-4 text-[19px] font-light leading-none text-white"
-          aria-label="Hairline — dashboard"
-        >
-          H<span className="text-taupe">|</span>l
+        <Link href="/" className="mb-4 text-[13px] leading-none" aria-label="Hairline — home">
+          <Wordmark onDark />
         </Link>
 
         <nav className="flex flex-col items-center gap-1.5">

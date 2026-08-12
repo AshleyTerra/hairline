@@ -73,6 +73,32 @@ body {
   body {
     background: #fff;
   }
+
+  /* Reports are wide, so print them landscape with room for the margins. */
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+
+  /* Table headings repeat on every page and rows are never split in half. */
+  thead {
+    display: table-header-group;
+  }
+  tfoot {
+    display: table-footer-group;
+  }
+  tr,
+  img {
+    break-inside: avoid;
+  }
+
+  /* Screen chrome that would waste paper. */
+  main {
+    padding: 0 !important;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

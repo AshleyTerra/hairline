@@ -30,7 +30,8 @@ export function ItemCatalogue({
   clientsTab,
   openDockets = 0,
 }: ItemCatalogueProps) {
-  const [tab, setTab] = useState<Tab>("services");
+  // The till opens on the day's clients — that is where reception starts.
+  const [tab, setTab] = useState<Tab>("clients");
   const [dept, setDept] = useState<string>(serviceDepts[0] ?? "");
   const [vendor, setVendor] = useState<string>(tillVendors[0] ?? "");
 

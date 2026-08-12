@@ -9,7 +9,23 @@ export interface Docket {
   /** Invoice number, allocated when the docket is opened, never reused. */
   number: number;
   openedAt: string;
+  /**
+   * The day this docket is for, YYYY-MM-DD. Usually today, but reception can
+   * prepare one for an upcoming day. Older dockets have no value here and are
+   * treated as belonging to the day they were opened.
+   */
+  forDate?: string;
   state: TillState;
+}
+
+/** The day a docket belongs to, tolerating dockets saved before forDate existed. */
+export function docketDate(docket: Docket): string {
+  return docket.forDate ?? docket.openedAt.slice(0, 10);
+}
+
+/** Dockets for one day. */
+export function docketsOn(dockets: readonly Docket[], date: string): Docket[] {
+  return dockets.filter((d) => docketDate(d) === date);
 }
 
 /** Invoice numbers carry on from the salon's existing sequence. */
@@ -22,9 +38,16 @@ export function openDocket(
   dockets: readonly Docket[],
   state: TillState,
   lastUsed: number,
-  now: string
+  now: string,
+  /** Which day the docket is for; defaults to the day it was opened. */
+  forDate?: string
 ): { docket: Docket; dockets: Docket[] } {
-  const docket: Docket = { number: nextNumber(dockets, lastUsed), openedAt: now, state };
+  const docket: Docket = {
+    number: nextNumber(dockets, lastUsed),
+    openedAt: now,
+    forDate: forDate ?? now.slice(0, 10),
+    state,
+  };
   return { docket, dockets: [...dockets, docket] };
 }
 

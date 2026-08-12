@@ -137,6 +137,12 @@ export const SCREENS: readonly ScreenDef[] = [
     href: "/pricing",
     description: "Service and retail pricing, and the printed client menu",
   },
+  {
+    key: "reports",
+    label: "Reports",
+    href: "/reports",
+    description: "Staff turnover and sales reports, printable or to Excel",
+  },
   { key: "admin", label: "Admin", href: "/admin", description: "Users, data and imports" },
 ];
 
@@ -144,6 +150,7 @@ export type Permissions = Record<Role, string[]>;
 
 export const DEFAULT_PERMISSIONS: Permissions = {
   owner: SCREENS.map((s) => s.key),
+  // Reports carry wage figures, so they stay with the owner by default.
   reception: ["till", "clients", "diary", "stock", "cashup", "pricing", "admin"],
   stylist: ["dashboard", "clients", "diary"],
 };

@@ -123,18 +123,29 @@ export default function TillPage() {
     setEditing(null);
   }
 
-  /** Parks the current sale and starts a fresh docket. */
-  function newDocket() {
+  /**
+   * Parks the current sale and starts a fresh docket. A date prepares one for an
+   * upcoming day; it waits there rather than opening at the counter now.
+   */
+  function newDocket(forDate?: string) {
     const { docket, dockets: next } = openDocket(
       docketNo != null ? saveDocket(dockets, docketNo, till) : dockets,
       emptyTill(),
       meta.lastInvoiceNumber,
-      new Date().toISOString()
+      new Date().toISOString(),
+      forDate
     );
     setDockets(next);
+    setAmount("");
+
+    const isFuture = forDate != null && forDate > meta.demoDate;
+    if (isFuture) {
+      // Leave the counter alone; the docket belongs to that future day.
+      setSaved({ number: docket.number, owing: 0, client: `docket for ${forDate}` });
+      return;
+    }
     setDocketNo(docket.number);
     dispatch({ type: "clear" });
-    setAmount("");
   }
 
   /**

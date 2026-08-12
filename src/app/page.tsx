@@ -10,7 +10,8 @@ import {
   Sparkline,
   StatTile,
 } from "@/components/charts";
-import { Badge, Card, CardTitle, PageHeader, TableScroll } from "@/components/ui";
+import { Card, CardTitle, PageHeader, TableScroll } from "@/components/ui";
+import { DashboardPeriod } from "@/components/DashboardPeriod";
 import {
   analytics,
   demoday,
@@ -25,26 +26,18 @@ import { useStore } from "@/lib/store";
 export default function DashboardPage() {
   const { role, stylistId, invoices } = useStore();
 
-  const playTotal = invoices.reduce((sum, i) => sum + i.total, 0);
-  const dayTotal = demoday.totals.total + playTotal;
-  const dayCount = demoday.invoiceCount + invoices.length;
-
   if (role === "stylist") {
     return <StylistDashboard stylistId={stylistId} />;
   }
 
-  return <OwnerDashboard dayTotal={dayTotal} dayCount={dayCount} playCount={invoices.length} />;
+  return <OwnerDashboard playCount={invoices.length} />;
 }
 
 // ---------------------------------------------------------------- owner view
 
 function OwnerDashboard({
-  dayTotal,
-  dayCount,
   playCount,
 }: {
-  dayTotal: number;
-  dayCount: number;
   playCount: number;
 }) {
   const years = analytics.revenueByYear.filter((y) => y.year >= 2016 && y.year <= 2025);
@@ -71,25 +64,7 @@ function OwnerDashboard({
         subtitle={`Trading day ${longDate(meta.demoDate)} · figures from Hairline's own records`}
       />
 
-      <section className="mb-8">
-        <h2 className="mb-2 text-sm font-semibold text-ink">
-          Today {playCount > 0 && <Badge tone="good">includes {playCount} rung up here</Badge>}
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile label="Taken so far" value={zar0(dayTotal)} hint={`${dayCount} sales`} />
-          <StatTile
-            label="Average ticket"
-            value={zar0(dayCount > 0 ? dayTotal / dayCount : 0)}
-            hint="Per client today"
-          />
-          <StatTile
-            label="Paid by card"
-            value={pct(analytics.paymentMix.cardShare, 0)}
-            hint={`Only ${pct(analytics.paymentMix.cashShare, 0)} of takings are cash`}
-          />
-          <StatTile label="Cash-up" value="Open" hint="Not yet locked for the day" tone="warn" />
-        </div>
-      </section>
+      <DashboardPeriod playCount={playCount} />
 
       <section className="mb-8 grid gap-4 lg:grid-cols-2">
         <Card>

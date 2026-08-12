@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { daybook, demoday, getStaff, meta, staff } from "@/lib/data";
-import { docketTotal, type Docket } from "@/lib/dockets";
+import { docketDate, docketTotal, type Docket } from "@/lib/dockets";
 import { shortDate, zar, zar0 } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { VAT_RATE } from "@/lib/till";
@@ -13,7 +13,19 @@ interface DayBookProps {
   dockets: Docket[];
   activeNumber: number | null;
   onOpenDocket: (number: number) => void;
-  onNewDocket: () => void;
+  /** Starts a docket; a date means it is being prepared for a future day. */
+  onNewDocket: (forDate?: string) => void;
+}
+
+/** Monday-to-Sunday week containing a date. */
+function weekOf(iso: string): { from: string; to: string } {
+  const d = new Date(`${iso}T00:00:00Z`);
+  const dow = (d.getUTCDay() + 6) % 7; // Monday = 0
+  const start = new Date(d);
+  start.setUTCDate(d.getUTCDate() - dow);
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+  return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) };
 }
 
 /** A day-book row, flattened so the demo day and history look the same. */
@@ -57,9 +69,18 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
   const [stylistId, setStylistId] = useState<number | "">("");
   const [slip, setSlip] = useState<InvoiceSlipData | null>(null);
 
-  const start = from;
-  const end = ranged ? to : from;
-  const isToday = start === meta.demoDate && end === meta.demoDate;
+  const [span, setSpan] = useState<"day" | "week">("day");
+
+  const week = weekOf(from);
+  const start = span === "week" ? week.from : from;
+  const end = span === "week" ? week.to : ranged ? to : from;
+  const isToday = start <= meta.demoDate && meta.demoDate <= end;
+  /** Dockets for whatever day is on screen, so future ones show on their day. */
+  const dayDockets = useMemo(
+    () => dockets.filter((d) => docketDate(d) >= start && docketDate(d) <= end),
+    [dockets, start, end]
+  );
+  const isFuture = from > meta.demoDate;
 
   const allRows = useMemo<Row[]>(() => {
     const lo = start <= end ? start : end;
@@ -147,7 +168,7 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
 
   const takings = rows.reduce((sum, r) => sum + r.v, 0);
   /** Money sitting on unsettled dockets, kept apart from the day's takings. */
-  const pending = dockets.reduce((sum, d) => sum + docketTotal(d), 0);
+  const pending = dayDockets.reduce((sum, d) => sum + docketTotal(d), 0);
   const spanDays = new Set(rows.map((r) => r.d)).size;
   const filtered = rows.length !== allRows.length;
 
@@ -200,14 +221,30 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
         <input
           type="date"
           value={from}
-          max={meta.demoDate}
           min={daybook.from}
           onChange={(e) => setFrom(e.target.value)}
           aria-label={ranged ? "From date" : "Date"}
           className={inputClass}
         />
 
-        {ranged && (
+        {/* Day or the whole week containing that date */}
+        <span className="flex gap-1">
+          {(["day", "week"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setSpan(v)}
+              aria-pressed={span === v}
+              className={`rounded-full px-3 py-1.5 text-[12.5px] font-semibold capitalize transition-colors ${
+                span === v ? "bg-ink text-white" : "bg-white text-taupe-deep hover:bg-chip"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </span>
+
+        {ranged && span === "day" && (
           <>
             <span className="text-[12px] text-faintink">to</span>
             <input
@@ -224,24 +261,25 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
 
         <button
           type="button"
-          onClick={() => shift(1)}
+          onClick={() => shift(span === "week" ? 7 : 1)}
           aria-label="Next day"
-          disabled={end >= meta.demoDate}
-          className="rounded-lg border border-edge-soft bg-white px-2.5 py-1.5 text-[13px] text-taupe-deep hover:border-taupe disabled:opacity-40"
+          className="rounded-lg border border-edge-soft bg-white px-2.5 py-1.5 text-[13px] text-taupe-deep hover:border-taupe"
         >
           →
         </button>
 
-        <button
-          type="button"
-          onClick={() => setRanged((r) => !r)}
-          aria-pressed={ranged}
-          className={`rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
-            ranged ? "bg-ink text-white" : "bg-white text-taupe-deep hover:bg-chip"
-          }`}
-        >
-          Date range
-        </button>
+        {span === "day" && (
+          <button
+            type="button"
+            onClick={() => setRanged((r) => !r)}
+            aria-pressed={ranged}
+            className={`rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+              ranged ? "bg-ink text-white" : "bg-white text-taupe-deep hover:bg-chip"
+            }`}
+          >
+            Date range
+          </button>
+        )}
 
         {!isToday && (
           <button
@@ -256,16 +294,23 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
           </button>
         )}
 
-        {isToday && (
+        {/* A docket can be started for today, or prepared for a future day */}
+        {(isToday || isFuture) && (
           <button
             type="button"
-            onClick={onNewDocket}
+            onClick={() => onNewDocket(isFuture ? from : undefined)}
             className="ml-auto rounded-lg bg-taupe-deep px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-ink"
           >
-            + New docket
+            {isFuture ? `+ Docket for ${shortDate(from)}` : "+ New docket"}
           </button>
         )}
       </div>
+
+      {isFuture && (
+        <p className="shrink-0 rounded-[10px] bg-chip px-3 py-2 text-[11.5px] text-taupe-deep">
+          {shortDate(from)} is in the future. Dockets prepared here wait until that day.
+        </p>
+      )}
 
       {/* Filters */}
       <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -308,21 +353,22 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
         <span className="ml-auto text-[12px] text-faintink">
           {rows.length} client{rows.length === 1 ? "" : "s"}
           {filtered ? ` of ${allRows.length}` : ""}
-          {ranged && spanDays > 1 ? ` over ${spanDays} days` : ""} ·{" "}
+          {/* Say the span whenever more than one day is on screen, week view included */}
+          {spanDays > 1 ? ` over ${spanDays} days` : ""} ·{" "}
           <span className="tnum text-ink">{zar0(takings)}</span>
         </span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto rounded-[10px] border border-edge-soft bg-white">
         {/* Open dockets first — these still need settling */}
-        {isToday && dockets.length > 0 && (
+        {dayDockets.length > 0 && (
           <div className="border-b border-edge">
             <p className="flex items-center justify-between bg-warn-soft px-4 py-1.5 text-[10.5px] uppercase tracking-[0.1em] text-warn">
               <span>Awaiting payment · {dockets.length}</span>
               {pending > 0 && <span className="tnum">{zar0(pending)}</span>}
             </p>
             <ul data-open-dockets>
-              {dockets.map((d) => (
+              {dayDockets.map((d) => (
                 <li key={d.number} className="border-b border-edge-faint last:border-0">
                   <button
                     type="button"
@@ -377,7 +423,7 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-canvas"
                 >
                   <span className="tnum w-12 shrink-0 text-[11.5px] text-faintink">
-                    {ranged && spanDays > 1 ? shortDate(r.d) : r.t}
+                    {spanDays > 1 ? shortDate(r.d) : r.t}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink">{r.c}</span>
                   <span className="hidden shrink-0 text-[11.5px] text-faintink sm:block">
