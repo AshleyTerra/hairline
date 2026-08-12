@@ -46,6 +46,50 @@ export function validateTel(tel: string): boolean {
   return digits === "" || TEL.test(digits);
 }
 
+export interface NewStaff {
+  name: string;
+  designation: string;
+  email: string;
+  tel: string;
+}
+
+/**
+ * Adds a staff member. The number carries on from the highest in use, so it
+ * never collides with a record that past sales already point at.
+ */
+export function addStaff(staff: readonly StaffRecord[], input: NewStaff): StaffResult {
+  const name = String(input.name ?? "").trim();
+  if (!name) return { ok: false, error: "A staff member needs a name." };
+  if (staff.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
+    return { ok: false, error: `“${name}” is already on the books.` };
+  }
+  if (!String(input.designation ?? "").trim()) {
+    return { ok: false, error: "Choose a designation." };
+  }
+  if (!validateEmail(input.email)) {
+    return { ok: false, error: `“${input.email}” does not look like an email address.` };
+  }
+  if (!validateTel(input.tel)) {
+    return { ok: false, error: `“${input.tel}” does not look like a phone number.` };
+  }
+
+  const id = staff.reduce((max, s) => Math.max(max, s.id), 0) + 1;
+  return {
+    ok: true,
+    staff: [
+      ...staff,
+      {
+        id,
+        name,
+        designation: input.designation,
+        email: input.email.trim(),
+        tel: input.tel.trim(),
+        active: true,
+      },
+    ],
+  };
+}
+
 /** Applies an edit, refusing anything that would leave a record unusable. */
 export function editStaff(
   staff: readonly StaffRecord[],

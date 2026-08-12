@@ -74,10 +74,68 @@ body {
     background: #fff;
   }
 
-  /* Reports are wide, so print them landscape with room for the margins. */
+  /* Portrait by default: invoices and slips. */
   @page {
-    size: A4 landscape;
+    size: A4;
     margin: 12mm;
+  }
+
+  /*
+   * Wide things — reports and the tri-fold menu — ask for landscape by name.
+   * Browsers without named-page support simply print portrait, which still
+   * reads; nothing is lost.
+   */
+  @page wide {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  .print-landscape {
+    page: wide;
+  }
+
+  /*
+   * Printing one thing on a screen full of other things. PrintArea marks its
+   * ancestors `print-keep`; everything else along that chain goes away with
+   * `display: none`, because merely invisible content still holds its space and
+   * still costs sheets of paper.
+   */
+  body.print-isolate > *:not(.print-keep):not(.print-target),
+  body.print-isolate .print-keep > *:not(.print-keep):not(.print-target) {
+    display: none !important;
+  }
+  /* The chain itself keeps nothing but its place in the flow. */
+  body.print-isolate .print-keep {
+    display: block !important;
+    position: static !important;
+    overflow: visible !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    gap: 0 !important;
+  }
+  body.print-isolate .print-target {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  /* Scroll containers clip on paper; let them run to their natural size. */
+  .overflow-x-auto,
+  .overflow-y-auto,
+  .overflow-auto,
+  .overflow-hidden {
+    overflow: visible !important;
   }
 
   /* Table headings repeat on every page and rows are never split in half. */
@@ -100,17 +158,59 @@ body {
     font-variant-numeric: tabular-nums;
   }
 
-  /* The client menu is a tri-fold: three columns across a landscape sheet. */
+  /*
+   * The client menu is a tri-fold: three panels across a landscape sheet, front
+   * and back. Columns flow rather than sit in a grid — a grid's columns are as
+   * tall as the tallest one, which leaves half a panel of white paper at every
+   * page break. `column-fill: auto` fills each panel to the fold before moving
+   * on, so 228 services land on one sheet printed both sides, as the salon's
+   * own menu does.
+   */
   .menu-sheet {
-    font-size: 9.5pt;
+    font-size: 8pt;
+    line-height: 1.2;
   }
-  .menu-sheet .grid {
-    display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 10mm !important;
+  .menu-sheet .menu-columns {
+    display: block !important;
+    columns: 3;
+    column-gap: 8mm;
+    column-fill: auto;
+    orphans: 3;
+    widows: 3;
   }
+  /* The on-screen column wrappers step aside so departments flow as one run. */
+  .menu-sheet .menu-columns > div {
+    display: contents;
+  }
+  /*
+   * A department may run over a fold — Treatments alone is 84 lines, and keeping
+   * it whole would leave a third of a panel blank. Only the heading is held to
+   * its rows, so no fold starts with a stranded title.
+   */
   .menu-sheet section {
+    break-inside: auto;
+  }
+  .menu-sheet h3 {
+    font-size: 8pt;
+    break-after: avoid;
     break-inside: avoid;
+  }
+  .menu-sheet li {
+    break-inside: avoid;
+  }
+  /*
+   * The contact block is the sixth panel of the fold, not a sheet of its own, so
+   * it flows with the rest and its three-across layout stacks to panel width.
+   */
+  .menu-back {
+    break-inside: avoid;
+  }
+  .menu-sheet .menu-back .grid {
+    display: block !important;
+  }
+  .menu-sheet .menu-back .grid > div {
+    margin-bottom: 4mm;
+    text-align: center !important;
   }
 }
 

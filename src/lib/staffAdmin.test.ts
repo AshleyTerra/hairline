@@ -3,6 +3,7 @@ import {
   DEFAULT_DESIGNATIONS,
   activeStaff,
   addDesignation,
+  addStaff,
   editStaff,
   removeDesignation,
   renameDesignation,
@@ -35,6 +36,63 @@ describe("contact details", () => {
 
   it("rejects a number that is too short", () => {
     expect(validateTel("0821234")).toBe(false);
+  });
+});
+
+describe("adding a staff member", () => {
+  const input = {
+    name: "Nomsa Dlamini",
+    designation: "Stylist",
+    email: "nomsa@example.co.za",
+    tel: "082 555 1234",
+  };
+
+  it("adds them with the next number", () => {
+    const r = addStaff(STAFF, input);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const added = r.staff.at(-1)!;
+      expect(added.id).toBe(12); // highest was 11
+      expect(added.name).toBe("Nomsa Dlamini");
+      expect(added.active).toBe(true);
+    }
+  });
+
+  it("never reuses a number past sales point at", () => {
+    const withHighId: StaffRecord[] = [
+      ...STAFF,
+      { id: 81, name: "Shakira S.", designation: "Stylist", email: "", tel: "", active: true },
+    ];
+    const r = addStaff(withHighId, input);
+    expect(r.ok && r.staff.at(-1)!.id).toBe(82);
+  });
+
+  it("refuses a blank name", () => {
+    expect(addStaff(STAFF, { ...input, name: "  " }).ok).toBe(false);
+  });
+
+  it("refuses someone already on the books", () => {
+    const r = addStaff(STAFF, { ...input, name: "karin m." });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/already on the books/i);
+  });
+
+  it("refuses a missing designation", () => {
+    expect(addStaff(STAFF, { ...input, designation: "" }).ok).toBe(false);
+  });
+
+  it("refuses bad contact details", () => {
+    expect(addStaff(STAFF, { ...input, email: "nope" }).ok).toBe(false);
+    expect(addStaff(STAFF, { ...input, tel: "123" }).ok).toBe(false);
+  });
+
+  it("allows blank contact details, which are optional", () => {
+    expect(addStaff(STAFF, { ...input, email: "", tel: "" }).ok).toBe(true);
+  });
+
+  it("does not mutate the list it was given", () => {
+    addStaff(STAFF, input);
+    expect(STAFF).toHaveLength(2);
   });
 });
 

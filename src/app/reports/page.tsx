@@ -9,6 +9,7 @@ import {
 } from "@/components/reports/ReportCriteria";
 import { earningStylists, getStaff, meta, staff } from "@/lib/data";
 import { longDate, shortDate, zar } from "@/lib/format";
+import { PrintArea } from "@/components/PrintArea";
 import { downloadTableCsv, downloadXlsx, printReport, reportFilename } from "@/lib/exportFile";
 import {
   itemTracking,
@@ -237,8 +238,9 @@ export default function ReportsPage() {
         </p>
       </div>
 
-      {/* The printed report starts here */}
-      <Card className="print:border-0">
+      {/* The printed report starts here — and, on paper, nothing else does */}
+      <PrintArea landscape>
+        <Card className="print:border-0">
         <header className="border-b border-hairline px-4 py-3">
           <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-ink">
             {report?.label}
@@ -399,7 +401,8 @@ export default function ReportsPage() {
             Excel and CSV exports contain every line.
           </p>
         )}
-      </Card>
+        </Card>
+      </PrintArea>
     </>
   );
 }

@@ -4,11 +4,14 @@ import { useState } from "react";
 import { Badge, Card, CardTitle, TableScroll } from "@/components/ui";
 import {
   addDesignation,
+  addStaff,
   editStaff,
   removeDesignation,
   renameDesignation,
   setActive,
+  type StaffRecord,
 } from "@/lib/staffAdmin";
+import { StaffDialog, type StaffDraft } from "./StaffDialog";
 import { useStore } from "@/lib/store";
 
 /** Staff records: names, designations, contact details and active status. */
@@ -18,8 +21,28 @@ export function StaffPanel() {
   const [newDesignation, setNewDesignation] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameTo, setRenameTo] = useState("");
+  /** null = closed, "new" = adding, otherwise the record being edited. */
+  const [editing, setEditing] = useState<StaffRecord | "new" | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
 
-  const field = "w-full rounded border border-hairline bg-paper px-2 py-1 text-sm text-ink";
+  function saveFromDialog(draft: StaffDraft) {
+    const result =
+      editing === "new"
+        ? addStaff(staffRecords, draft)
+        : editStaff(staffRecords, (editing as StaffRecord).id, draft);
+
+    if (!result.ok) {
+      setDialogError(result.error);
+      return;
+    }
+    setStaffRecords(result.staff);
+    setMessage({
+      tone: "ok",
+      text: editing === "new" ? `${draft.name} added.` : `${draft.name} updated.`,
+    });
+    setEditing(null);
+    setDialogError(null);
+  }
 
   function apply(
     result:
@@ -56,8 +79,20 @@ export function StaffPanel() {
       <Card>
         <CardTitle
           right={
-            <span className="text-xs text-mutedink">
-              {staffRecords.filter((s) => s.active).length} active of {staffRecords.length}
+            <span className="flex items-center gap-3">
+              <span className="text-xs text-mutedink">
+                {staffRecords.filter((s) => s.active).length} active of {staffRecords.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing("new");
+                  setDialogError(null);
+                }}
+                className="rounded bg-taupe-deep px-3 py-1.5 text-xs font-semibold text-white hover:bg-ink"
+              >
+                + Add staff
+              </button>
             </span>
           }
         >
@@ -73,79 +108,18 @@ export function StaffPanel() {
                 <th className="px-3 py-2.5 font-semibold">Email</th>
                 <th className="px-3 py-2.5 font-semibold">Telephone</th>
                 <th className="px-3 py-2.5 text-center font-semibold">Active</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Edit</th>
               </tr>
             </thead>
             <tbody>
               {staffRecords.map((s) => (
                 <tr key={s.id} className="border-b border-hairline-soft last:border-0">
-                  <td className="tnum px-3 py-2 text-mutedink">{s.id}</td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="text"
-                      defaultValue={s.name}
-                      onBlur={(e) =>
-                        e.target.value !== s.name &&
-                        apply(
-                          editStaff(staffRecords, s.id, { name: e.target.value }),
-                          `Renamed to ${e.target.value}.`
-                        )
-                      }
-                      aria-label={`Name for staff ${s.id}`}
-                      className={field}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <select
-                      value={s.designation}
-                      onChange={(e) =>
-                        apply(
-                          editStaff(staffRecords, s.id, { designation: e.target.value }),
-                          `${s.name} is now ${e.target.value}.`
-                        )
-                      }
-                      aria-label={`Designation for ${s.name}`}
-                      className={field}
-                    >
-                      {[...new Set([...designations, s.designation])].map((d) => (
-                        <option key={d} value={d}>
-                          {d}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="email"
-                      defaultValue={s.email}
-                      placeholder="optional"
-                      onBlur={(e) =>
-                        e.target.value !== s.email &&
-                        apply(
-                          editStaff(staffRecords, s.id, { email: e.target.value }),
-                          `Email saved for ${s.name}.`
-                        )
-                      }
-                      aria-label={`Email for ${s.name}`}
-                      className={field}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="tel"
-                      defaultValue={s.tel}
-                      placeholder="082 123 4567"
-                      onBlur={(e) =>
-                        e.target.value !== s.tel &&
-                        apply(
-                          editStaff(staffRecords, s.id, { tel: e.target.value }),
-                          `Number saved for ${s.name}.`
-                        )
-                      }
-                      aria-label={`Telephone for ${s.name}`}
-                      className={field}
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-center">
+                  <td className="tnum px-3 py-2.5 text-mutedink">{s.id}</td>
+                  <td className="px-3 py-2.5 font-medium text-ink">{s.name}</td>
+                  <td className="px-3 py-2.5 text-body">{s.designation}</td>
+                  <td className="px-3 py-2.5 text-mutedink">{s.email || "—"}</td>
+                  <td className="px-3 py-2.5 text-mutedink">{s.tel || "—"}</td>
+                  <td className="px-3 py-2.5 text-center">
                     <input
                       type="checkbox"
                       checked={s.active}
@@ -158,6 +132,19 @@ export function StaffPanel() {
                       aria-label={`Active: ${s.name}`}
                       className="h-4 w-4 accent-[#6e6455]"
                     />
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditing(s);
+                        setDialogError(null);
+                      }}
+                      aria-label={`Edit ${s.name}`}
+                      className="text-xs font-semibold text-taupe-deep underline underline-offset-2"
+                    >
+                      Edit
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -279,6 +266,19 @@ export function StaffPanel() {
           </button>
         </div>
       </Card>
+
+      {editing && (
+        <StaffDialog
+          existing={editing === "new" ? null : editing}
+          designations={designations}
+          error={dialogError}
+          onSave={saveFromDialog}
+          onClose={() => {
+            setEditing(null);
+            setDialogError(null);
+          }}
+        />
+      )}
 
       {message && (
         <p

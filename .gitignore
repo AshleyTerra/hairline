@@ -13,3 +13,6 @@ MySalon_2026-07-29.zip
 hairline 2026/
 *.bak
 *.raw.json
+# Next.js regenerates these on every dev run.
+AGENTS.md
+CLAUDE.md

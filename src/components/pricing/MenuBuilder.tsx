@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Card, CardTitle } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
+import { PrintArea } from "@/components/PrintArea";
 import { meta, serviceDepts, services } from "@/lib/data";
 import { zar0 } from "@/lib/format";
 
@@ -179,49 +180,52 @@ export function MenuBuilder() {
           <CardTitle>Preview</CardTitle>
         </div>
 
-        <div className="menu-sheet px-6 py-6 print:px-0 print:py-0">
+        <PrintArea landscape className="menu-sheet px-6 py-6 print:px-0 print:py-0">
           {total === 0 ? (
             <p className="py-10 text-center text-sm text-mutedink">
               Nothing chosen yet — tick a few services above.
             </p>
           ) : (
-            <>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {columns.map((col, i) => (
-                  <div key={i} className="flex flex-col gap-4">
-                    {col.map((group) => (
-                      <section key={group.dept} className="break-inside-avoid">
-                        <h3 className="mb-1 border-b border-ink pb-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink">
-                          {group.dept}
-                        </h3>
-                        <ul>
-                          {group.items.map((s) => (
-                            <li
-                              key={s.id}
-                              className="flex items-baseline justify-between gap-2 py-[1px]"
-                            >
-                              <span className="text-[10.5px] uppercase leading-tight text-ink">
-                                {s.name}
-                              </span>
-                              <span className="tnum shrink-0 text-[10.5px] font-semibold text-ink">
-                                {zar0(s.price)}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
-                    ))}
-                  </div>
-                ))}
-              </div>
+            <div className="menu-columns grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {columns.map((col, i) => (
+                <div key={i} className="flex flex-col gap-4">
+                  {col.map((group) => (
+                    <section key={group.dept}>
+                      <h3 className="mb-1 border-b border-ink pb-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink">
+                        {group.dept}
+                      </h3>
+                      <ul>
+                        {group.items.map((s) => (
+                          <li
+                            key={s.id}
+                            className="flex items-baseline justify-between gap-2 py-[1px]"
+                          >
+                            <span className="text-[10.5px] uppercase leading-tight text-ink">
+                              {s.name}
+                            </span>
+                            <span className="tnum shrink-0 text-[10.5px] font-semibold text-ink">
+                              {zar0(s.price)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ))}
+                </div>
+              ))}
 
-              <p className="mt-5 text-center text-[9px] font-bold uppercase italic text-ink">
+              {/*
+                The note and the contact block live inside the flow, so on paper
+                they fill the last panel of the fold instead of being pushed onto
+                a sheet of their own.
+              */}
+              <p className="menu-note mt-5 text-center text-[9px] font-bold uppercase italic text-ink sm:col-span-2 lg:col-span-3">
                 All prices include VAT &amp; are subject to change without prior notice. T&apos;s
                 &amp; C&apos;s apply.
               </p>
 
               {/* Back panel: the contact block from the printed menu */}
-              <div className="mt-6 break-before-page border-t border-hairline pt-6 print:border-0">
+              <div className="menu-back mt-6 border-t border-hairline pt-6 sm:col-span-2 lg:col-span-3 print:border-0">
                 <div className="grid items-center gap-6 sm:grid-cols-3">
                   <div className="text-center sm:text-left">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink">
@@ -253,9 +257,9 @@ export function MenuBuilder() {
                   </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
-        </div>
+        </PrintArea>
       </Card>
     </div>
   );

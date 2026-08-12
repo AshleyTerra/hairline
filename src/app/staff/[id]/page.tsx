@@ -3,8 +3,13 @@
 import Link from "next/link";
 import { use } from "react";
 import { notFound } from "next/navigation";
+import { useMemo } from "react";
 import { ColumnChart, Meter, StatTile } from "@/components/charts";
 import { Card, CardTitle, PageHeader } from "@/components/ui";
+import { PeriodBar, usePeriod } from "@/components/PeriodBar";
+import { staffTurnover } from "@/lib/reports";
+import { salesBetween } from "@/lib/salesSource";
+import { useStore } from "@/lib/store";
 import { demoday, getStaff, meta } from "@/lib/data";
 import { longDate, monthLabel, pct, shortDate, zar, zar0 } from "@/lib/format";
 
@@ -16,6 +21,42 @@ export default function StaffMemberPage({ params }: { params: Promise<{ id: stri
 
   const bookings = demoday.bookings.filter((b) => b.stylistId === person.id);
   const dayTotal = bookings.reduce((sum, b) => sum + b.total, 0);
+  const period = usePeriod(["day", "week", "month", "range", "twelve"], "day");
+  const { from, to, isToday, label, grain } = period.period;
+  const { invoices } = useStore();
+
+  /**
+   * Their turnover and clients for the chosen window. The twelve-month preset
+   * uses the aggregate, which reaches further back than the line-level history.
+   */
+  const useAggregate = grain === "twelve";
+  const windowSales = useMemo(
+    () => (useAggregate ? [] : salesBetween(from, to, invoices)),
+    [useAggregate, from, to, invoices]
+  );
+  const windowTurnover = useMemo(() => {
+    if (useAggregate) return person.totalRevenue;
+    return staffTurnover(windowSales, [person.id])[0]?.inclVat.total ?? 0;
+  }, [useAggregate, windowSales, person.id, person.totalRevenue]);
+
+  /** Their clients in the window, most recent first. */
+  const windowClients = useMemo(() => {
+    if (isToday) return [];
+    return windowSales
+      .filter((sale) => sale.lines.some((l) => l.stylistId === person.id))
+      .map((sale) => ({
+        number: sale.number,
+        date: sale.date,
+        client: sale.client,
+        value: sale.lines
+          .filter((l) => l.stylistId === person.id)
+          .reduce((n, l) => n + l.price * l.qty * (1 - l.disc / 100), 0),
+        what: sale.lines.find((l) => l.stylistId === person.id)?.descr ?? "",
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 60);
+  }, [isToday, windowSales, person]);
+
   const thisMonth = person.monthly[person.monthly.length - 1];
   const monthRevenue = thisMonth?.revenue ?? 0;
 
@@ -48,18 +89,31 @@ export default function StaffMemberPage({ params }: { params: Promise<{ id: stri
             ? `With Hairline since ${shortDate(person.startDate)}`
             : "Team member"
         }
+        actions={<PeriodBar c={period} />}
       />
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
-          label="Booked today"
-          value={zar0(dayTotal)}
-          hint={`${bookings.length} client${bookings.length === 1 ? "" : "s"}`}
+          label={isToday ? "Booked today" : "Clients in period"}
+          value={isToday ? zar0(dayTotal) : String(windowClients.length)}
+          hint={
+            isToday
+              ? `${bookings.length} client${bookings.length === 1 ? "" : "s"}`
+              : label
+          }
         />
         <StatTile
-          label="Turnover, 12 months"
-          value={zar0(person.totalRevenue)}
-          hint={person.invoices > 0 ? `${person.invoices} invoices` : "Billed under a senior stylist"}
+          label={useAggregate ? "Turnover, 12 months" : `Turnover, ${label.toLowerCase()}`}
+          value={zar0(windowTurnover)}
+          hint={
+            useAggregate
+              ? person.invoices > 0
+                ? `${person.invoices} invoices`
+                : "Billed under a senior stylist"
+              : windowTurnover > 0
+                ? "From the sales in this window"
+                : "Nothing billed to them in this window"
+          }
         />
         <StatTile label="Tips" value={zar0(person.tips.total)} hint={`${person.tips.times} times`} />
         <StatTile

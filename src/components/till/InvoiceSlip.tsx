@@ -3,6 +3,7 @@
 import { getStaff, meta } from "@/lib/data";
 import { longDate, zar } from "@/lib/format";
 import { Wordmark } from "@/components/Wordmark";
+import { PrintArea } from "@/components/PrintArea";
 import type { Payment, Tip, TillLine } from "@/lib/types";
 
 export interface InvoiceSlipData {
@@ -36,7 +37,7 @@ export function InvoiceSlip({ data, onClose }: { data: InvoiceSlipData; onClose:
       aria-modal="true"
       aria-label={`Invoice ${data.number}`}
     >
-      <div className="w-full max-w-md rounded-lg border border-hairline bg-card print:max-w-none print:rounded-none print:border-0">
+      <PrintArea className="w-full max-w-md rounded-lg border border-hairline bg-card print:max-w-none print:rounded-none print:border-0">
         <div className="no-print flex items-center justify-between border-b border-hairline px-5 py-3">
           <h2 className="text-sm font-semibold text-ink">Invoice #{data.number}</h2>
           <span className="flex gap-2">
@@ -151,7 +152,7 @@ export function InvoiceSlip({ data, onClose }: { data: InvoiceSlipData; onClose:
             Retail products may be exchanged unopened within 14 days with this invoice.
           </p>
         </div>
-      </div>
+      </PrintArea>
     </div>
   );
 }
