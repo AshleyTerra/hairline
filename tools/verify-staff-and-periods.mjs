@@ -230,6 +230,53 @@ check("the portfolio figures follow the period", pDayMoney !== pTwelveMoney,
   `${pDayMoney} → ${pTwelveMoney}`);
 await shot("s10-portfolio-twelve");
 
+/**
+ * No tile may report nothing over twelve months while the turnover beside it
+ * runs to hundreds of thousands: line-level history stops at six months, so the
+ * long window has to be answered from the aggregate.
+ */
+const tiles = await ev(`Array.from(document.querySelectorAll('main div')).filter(d =>
+  /^(VISITS|CLIENTS IN PERIOD|TURNOVER|SALES IN PERIOD)/i.test(d.innerText.trim())
+).map(d => d.innerText.replace(/\\u00a0/g," ").replace(/\\n/g," | ")).slice(0, 6)`);
+check("the twelve-month window counts visits from the aggregate",
+  /Visits, 12 months \| [1-9]/i.test(pTwelve.replace(/\s+/g, " ")) ||
+    !/(Clients in period|Visits[^|]*) \| 0\b/i.test(pTwelve),
+  JSON.stringify(tiles?.[0] ?? "").slice(0, 120));
+check("no zero count sits beside a twelve-month turnover",
+  !/\b0\b\s*Last 12 months/i.test(pTwelve.replace(/\s+/g, " ")));
+const visits = (pTwelve.replace(/\s+/g, " ").match(/Visits, 12 months (\d[\d ]*)/i) ?? [])[1];
+check("the visit count is a real figure", !!visits && Number(visits.replace(/ /g, "")) > 0,
+  visits ?? "none found");
+
+// A shorter window lists the visits behind the count.
+await clickGrain("Month");
+await sleep(1800);
+const pMonth = (await text()).replace(/\s+/g, " ");
+const listed = await ev(`(() => {
+  const card = Array.from(document.querySelectorAll('div')).find(d =>
+    /^Clients in this period/.test(d.innerText.trim()));
+  return card ? card.querySelectorAll('li').length : -1;
+})()`);
+const counted = Number(((pMonth.match(/CLIENTS IN PERIOD (\d[\d ]*)/i) ?? [])[1] ?? "0").replace(/ /g, ""));
+check("a month window lists the visits behind the count", listed > 0, `${listed} rows listed`);
+check("the count is the whole window, not the listed page",
+  counted >= listed && counted > 0, `count ${counted}, listed ${listed}`);
+check("each row carries the client, the work and the invoice number",
+  /#9\d{4}/.test(pMonth), (pMonth.match(/#9\d{4}/) ?? [""])[0]);
+await shot("s10b-portfolio-month-list");
+
+// The same trap on the team screen: a twelve-month sales count read off the
+// six-month index would understate the year by half.
+await send("Page.navigate", { url: BASE + "/staff" });
+await until(`!!document.querySelector('button[aria-pressed]')`);
+await sleep(1600);
+const teamTwelve = (await text()).replace(/\s+/g, " ");
+const teamSales = (teamTwelve.match(/SALES IN PERIOD ([\d ]+)/i) ??
+  teamTwelve.match(/Sales in period ([\d ]+)/) ?? [])[1];
+check("the team's twelve-month sales count comes from the aggregate",
+  !!teamSales && Number(teamSales.replace(/ /g, "")) > 5000, teamSales ?? "none found");
+await shot("s11-team-twelve-sales");
+
 console.log(results.join("\n"));
 console.log(
   `\n${results.filter((r) => r.startsWith("PASS")).length}/${results.length} passed on ${BASE}`

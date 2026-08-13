@@ -8,7 +8,7 @@ import { ColumnChart, Meter, StatTile } from "@/components/charts";
 import { Card, CardTitle, PageHeader } from "@/components/ui";
 import { PeriodBar, usePeriod } from "@/components/PeriodBar";
 import { staffTurnover } from "@/lib/reports";
-import { salesBetween } from "@/lib/salesSource";
+import { reportsFrom, salesBetween } from "@/lib/salesSource";
 import { useStore } from "@/lib/store";
 import { demoday, getStaff, meta } from "@/lib/data";
 import { longDate, monthLabel, pct, shortDate, zar, zar0 } from "@/lib/format";
@@ -39,8 +39,8 @@ export default function StaffMemberPage({ params }: { params: Promise<{ id: stri
     return staffTurnover(windowSales, [person.id])[0]?.inclVat.total ?? 0;
   }, [useAggregate, windowSales, person.id, person.totalRevenue]);
 
-  /** Their clients in the window, most recent first. */
-  const windowClients = useMemo(() => {
+  /** Every visit they were billed for in the window, most recent first. */
+  const windowVisits = useMemo(() => {
     if (isToday) return [];
     return windowSales
       .filter((sale) => sale.lines.some((l) => l.stylistId === person.id))
@@ -53,9 +53,11 @@ export default function StaffMemberPage({ params }: { params: Promise<{ id: stri
           .reduce((n, l) => n + l.price * l.qty * (1 - l.disc / 100), 0),
         what: sale.lines.find((l) => l.stylistId === person.id)?.descr ?? "",
       }))
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 60);
+      .sort((a, b) => b.date.localeCompare(a.date));
   }, [isToday, windowSales, person]);
+
+  /** Long windows are listed in part; the count above is always the whole of it. */
+  const LIST_CAP = 60;
 
   const thisMonth = person.monthly[person.monthly.length - 1];
   const monthRevenue = thisMonth?.revenue ?? 0;
@@ -93,13 +95,30 @@ export default function StaffMemberPage({ params }: { params: Promise<{ id: stri
       />
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {/*
+          Over twelve months the count comes from the aggregate: line-by-line
+          history only reaches back six months, so counting visits from it would
+          quietly report half a year as a full one.
+        */}
         <StatTile
-          label={isToday ? "Booked today" : "Clients in period"}
-          value={isToday ? zar0(dayTotal) : String(windowClients.length)}
+          label={isToday ? "Booked today" : useAggregate ? "Visits, 12 months" : "Clients in period"}
+          value={
+            isToday
+              ? zar0(dayTotal)
+              : useAggregate
+                ? person.invoices > 0
+                  ? person.invoices.toLocaleString("en-ZA")
+                  : "—"
+                : String(windowVisits.length)
+          }
           hint={
             isToday
               ? `${bookings.length} client${bookings.length === 1 ? "" : "s"}`
-              : label
+              : useAggregate
+                ? person.invoices > 0
+                  ? "Invoices billed to them"
+                  : "Billed under a senior stylist"
+                : label
           }
         />
         <StatTile
@@ -108,7 +127,7 @@ export default function StaffMemberPage({ params }: { params: Promise<{ id: stri
           hint={
             useAggregate
               ? person.invoices > 0
-                ? `${person.invoices} invoices`
+                ? "Services and retail combined"
                 : "Billed under a senior stylist"
               : windowTurnover > 0
                 ? "From the sales in this window"
@@ -166,36 +185,92 @@ export default function StaffMemberPage({ params }: { params: Promise<{ id: stri
           </Card>
         )}
 
+        {/* The diary for the demo day, or whoever they saw in the chosen window. */}
         <Card>
-          <CardTitle right={<span className="text-xs text-mutedink">{longDate(meta.demoDate)}</span>}>
-            Today&apos;s clients
+          <CardTitle
+            right={
+              <span className="text-xs text-mutedink">
+                {isToday ? longDate(meta.demoDate) : label}
+              </span>
+            }
+          >
+            {isToday ? "Today's clients" : "Clients in this period"}
           </CardTitle>
-          {bookings.length === 0 ? (
+
+          {isToday ? (
+            bookings.length === 0 ? (
+              <p className="px-4 py-10 text-center text-sm text-mutedink">
+                Nothing booked on the demo day.
+              </p>
+            ) : (
+              <ul className="divide-y divide-hairline-soft">
+                {bookings.map((b) => (
+                  <li
+                    key={b.invoiceId}
+                    className="flex items-center justify-between gap-3 px-4 py-2.5"
+                  >
+                    <span className="min-w-0">
+                      <Link
+                        href={`/clients/${b.clientId}`}
+                        className="block truncate text-sm text-ink underline-offset-2 hover:underline"
+                      >
+                        {b.clientName}
+                      </Link>
+                      <span className="block truncate text-xs text-mutedink">{b.service}</span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="tnum block text-sm font-semibold text-ink">
+                        {zar(b.total)}
+                      </span>
+                      <span className="tnum block text-xs text-mutedink">
+                        {b.start}–{b.end}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : useAggregate ? (
             <p className="px-4 py-10 text-center text-sm text-mutedink">
-              Nothing booked on the demo day.
+              {person.invoices > 0
+                ? `${person.invoices.toLocaleString("en-ZA")} invoices over the twelve months. Client by client, the history runs from ${shortDate(reportsFrom)} — pick Day, Week, Month or Range to list them.`
+                : "Their work is billed under a senior stylist, so no invoices carry their name."}
+            </p>
+          ) : windowVisits.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-mutedink">
+              Nothing billed to them in this window.
+              {from < reportsFrom && ` Client-by-client history starts ${shortDate(reportsFrom)}.`}
             </p>
           ) : (
-            <ul className="divide-y divide-hairline-soft">
-              {bookings.map((b) => (
-                <li key={b.invoiceId} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                  <span className="min-w-0">
-                    <Link
-                      href={`/clients/${b.clientId}`}
-                      className="block truncate text-sm text-ink underline-offset-2 hover:underline"
-                    >
-                      {b.clientName}
-                    </Link>
-                    <span className="block truncate text-xs text-mutedink">{b.service}</span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className="tnum block text-sm font-semibold text-ink">{zar(b.total)}</span>
-                    <span className="tnum block text-xs text-mutedink">
-                      {b.start}–{b.end}
+            <>
+              <ul className="divide-y divide-hairline-soft">
+                {windowVisits.slice(0, LIST_CAP).map((v) => (
+                  <li
+                    key={v.number}
+                    className="flex items-center justify-between gap-3 px-4 py-2.5"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm text-ink">{v.client}</span>
+                      <span className="block truncate text-xs text-mutedink">{v.what}</span>
                     </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
+                    <span className="shrink-0 text-right">
+                      <span className="tnum block text-sm font-semibold text-ink">
+                        {zar(v.value)}
+                      </span>
+                      <span className="tnum block text-xs text-mutedink">
+                        {shortDate(v.date)} · #{v.number}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {windowVisits.length > LIST_CAP && (
+                <p className="border-t border-hairline-soft px-4 py-2.5 text-xs text-mutedink">
+                  Showing the {LIST_CAP} most recent of {windowVisits.length} visits. Reports export
+                  the lot.
+                </p>
+              )}
+            </>
           )}
         </Card>
 

@@ -51,6 +51,15 @@ export default function StaffPage() {
   const teamRevenue = stylists.reduce((sum, s) => sum + revenueOf(s.id, s.totalRevenue), 0);
   const teamTips = staff.reduce((sum, s) => sum + s.tips.total, 0);
 
+  /**
+   * Invoices over the window. Line-by-line history reaches back six months, so a
+   * twelve-month count has to come from the aggregate — otherwise half a year is
+   * reported as a full one.
+   */
+  const salesCount = useAggregate
+    ? staff.reduce((sum, s) => sum + s.invoices, 0)
+    : salesBetween(from, to, invoices).length;
+
   return (
     <>
       <PageHeader
@@ -69,7 +78,7 @@ export default function StaffPage() {
             value={
               isToday
                 ? String(demoday.bookings.length)
-                : String(salesBetween(from, to, invoices).length)
+                : salesCount.toLocaleString("en-ZA")
             }
             hint={isToday ? "Across the diary" : label}
           />
