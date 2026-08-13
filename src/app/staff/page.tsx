@@ -48,7 +48,12 @@ export default function StaffPage() {
     (a, b) => revenueOf(b.id, b.stats.totalRevenue) - revenueOf(a.id, a.stats.totalRevenue)
   );
 
-  const teamRevenue = stylists.reduce((sum, m) => sum + revenueOf(m.id, m.stats.totalRevenue), 0);
+  /**
+   * The whole team, not the stylists alone: MySalon attributed turnover to a few
+   * operators, and re-designating someone must not make the salon's takings
+   * appear to fall.
+   */
+  const teamRevenue = team.reduce((sum, m) => sum + revenueOf(m.id, m.stats.totalRevenue), 0);
   const teamTips = team.reduce((sum, m) => sum + m.stats.tips.total, 0);
 
   /**
@@ -139,11 +144,11 @@ export default function StaffPage() {
         })}
       </div>
 
-      <h2 className="mb-2 text-sm font-semibold text-ink">Assistants and reception</h2>
+      <h2 className="mb-2 text-sm font-semibold text-ink">Operators, assistants and reception</h2>
       <p className="mb-3 max-w-2xl text-xs text-mutedink">
         These team members clock in every day and receive tips, but MySalon bills their work under
-        the senior stylist, so no turnover is attributed to them. In the new system their
-        contribution is visible.
+        the senior stylist, so little or none of it is attributed to them. Whatever was attributed
+        is shown here, alongside the tips they took.
       </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {others.map((m) => (
@@ -161,6 +166,18 @@ export default function StaffPage() {
                   <Badge tone="neutral">{zar0(m.stats.tips.total)} tips</Badge>
                 )}
               </div>
+
+              {/* An operator with turnover of their own keeps it in view. */}
+              {canSeeMoney && m.stats.totalRevenue > 0 && (
+                <p className="mt-3 text-sm">
+                  <span className="tnum font-semibold text-ink">
+                    {zar0(revenueOf(m.id, m.stats.totalRevenue))}
+                  </span>{" "}
+                  <span className="text-[11px] text-mutedink">
+                    {useAggregate ? "12 months, billed to them" : label}
+                  </span>
+                </p>
+              )}
             </Card>
           </Link>
         ))}

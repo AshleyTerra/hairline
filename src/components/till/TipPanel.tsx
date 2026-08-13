@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { staff } from "@/lib/data";
 import { zar } from "@/lib/format";
-import { operators, roster } from "@/lib/roster";
+import { creditable, roster } from "@/lib/roster";
 import { useStore } from "@/lib/store";
 import type { Tip } from "@/lib/types";
 
@@ -25,7 +25,7 @@ export function TipPanel({ tips, suggestedIds, onTip }: TipPanelProps) {
 
   /* Everyone on the books today bar reception, with the sale's stylists first. */
   const { staffRecords } = useStore();
-  const tippable = operators(roster(staffRecords, staff));
+  const tippable = creditable(roster(staffRecords, staff));
   const choices = [
     ...tippable.filter((m) => suggestedIds.includes(m.id)),
     ...tippable.filter((m) => !suggestedIds.includes(m.id)),

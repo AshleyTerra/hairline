@@ -11,11 +11,12 @@ import type { Staff } from "./types";
 import type { StaffRecord } from "./staffAdmin";
 
 /**
- * Designations whose work MySalon bills under a senior stylist. They earn tips
- * daily but never carry turnover of their own, which is why the team screen
- * shows them apart.
+ * Designations whose work MySalon bills under a senior stylist. Operators,
+ * assistants and apprentices earn tips daily but never carry turnover of their
+ * own, and reception carries none either, which is why the team screen shows
+ * them apart from the stylists.
  */
-const SUPPORT = /assistant|apprentice|reception/i;
+const SUPPORT = /operator|assistant|apprentice|reception/i;
 
 export const isSupport = (designation: string): boolean => SUPPORT.test(designation);
 
@@ -70,9 +71,10 @@ export function roster(
 
 /**
  * Anyone who can be credited with work or handed a tip: the whole team bar
- * reception, newest last, so the till and the tip dropdown agree.
+ * reception, newest last, so the till's pickers agree with each other. Fed an
+ * active roster, it offers only people who are still working.
  */
-export const operators = (members: readonly RosterMember[]): RosterMember[] =>
+export const creditable = (members: readonly RosterMember[]): RosterMember[] =>
   members.filter((m) => !/reception/i.test(m.designation));
 
 /** One member by staff number, whether they have history or only a record. */

@@ -11,10 +11,10 @@ import { InvoiceSlip, type InvoiceSlipData } from "@/components/till/InvoiceSlip
 import { closeDocket, findDocket, nextNumber, openDocket, saveDocket } from "@/lib/dockets";
 import { PaymentPanel } from "@/components/till/PaymentPanel";
 import { GlobalSearch } from "@/components/till/GlobalSearch";
-import { demoday, earningStylists, getClient, getStaff, meta, staff } from "@/lib/data";
+import { demoday, getClient, getStaff, meta, staff } from "@/lib/data";
 import { initials, longDate, zar, zar0 } from "@/lib/format";
 import { demoNow } from "@/lib/clock";
-import { operators, roster } from "@/lib/roster";
+import { creditable, roster } from "@/lib/roster";
 import { useStore } from "@/lib/store";
 import { elapsedSeconds, emptyTill, tillReduce, totals as computeTotals } from "@/lib/till";
 import type { Client, PaymentMethod, Product, Service, TillLine } from "@/lib/types";
@@ -68,13 +68,22 @@ export default function TillPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [till, docketNo]);
 
+  /**
+   * Who a line can be credited to, and who can be tipped: whoever is on the
+   * books in Admin today, bar reception. Someone taken on this morning can be
+   * picked this morning; someone turned inactive is not offered at all.
+   */
+  const staffForPicker = useMemo(() => creditable(roster(staffRecords, staff)), [staffRecords]);
+
+  /** The client's usual stylist if they are still working, else the first on. */
   const defaultStylist = useMemo(() => {
     const client = getClient(till.clientId);
-    if (client?.prefStylistId && earningStylists.some((s) => s.id === client.prefStylistId)) {
+    if (client?.prefStylistId && staffForPicker.some((m) => m.id === client.prefStylistId)) {
       return client.prefStylistId;
     }
-    return earningStylists[0]?.id ?? null;
-  }, [till.clientId]);
+    const stylists = staffForPicker.filter((m) => !m.support);
+    return (stylists[0] ?? staffForPicker[0])?.id ?? null;
+  }, [till.clientId, staffForPicker]);
 
   function addService(service: Service) {
     const line: TillLine = {
@@ -260,12 +269,6 @@ export default function TillPage() {
     return staff.filter((s) => ids.has(s.id));
   }, [till.lines]);
 
-  /**
-   * Who a line can be credited to: whoever is on the books in Admin today, bar
-   * reception. A stylist taken on this morning can be picked this morning.
-   */
-  const creditable = useMemo(() => operators(roster(staffRecords, staff)), [staffRecords]);
-
   const hasLines = till.lines.length > 0;
   const changeDue = totals.change > 0;
 
@@ -393,7 +396,7 @@ export default function TillPage() {
                 {till.lines.map((line) => {
                   /* Records first, so a stylist taken on today has a name here. */
                   const stylist =
-                    creditable.find((m) => m.id === line.stylistId) ?? getStaff(line.stylistId);
+                    staffForPicker.find((m) => m.id === line.stylistId) ?? getStaff(line.stylistId);
                   return (
                     <li key={line.key} className="group px-5 py-3">
                       <div className="flex items-start gap-3">
@@ -448,7 +451,7 @@ export default function TillPage() {
                               aria-label={`Stylist for ${line.descr}`}
                               className="rounded border border-edge bg-white px-1.5 py-1 text-[11.5px] text-ink"
                             >
-                              {creditable.map((m) => (
+                              {staffForPicker.map((m) => (
                                 <option key={m.id} value={m.id}>
                                   {m.name}
                                 </option>

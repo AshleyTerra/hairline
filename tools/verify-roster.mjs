@@ -254,6 +254,57 @@ check("reception is still kept out of the tip list",
   !tipList.some((t) => /Ann K\./.test(t)), JSON.stringify(tipList.slice(0, 3)));
 await shot("r4-till-pickers");
 
+// ------------------------------- operators belong with the support staff
+await openAdminStaff();
+await clickLabel("Edit Meghan H.");
+await sleep(900);
+await fill("Staff designation", "Operator");
+await clickExact("Save changes");
+await sleep(1300);
+await send("Page.navigate", { url: BASE + "/staff" });
+await until(`!!document.querySelector('a[href^="/staff/"]')`);
+await sleep(1700);
+check("the support section is named for operators too",
+  /Operators, assistants and reception/i.test(await text()));
+check("an operator is listed with the support staff, not the stylists", await ev(`(() => {
+  const heads = Array.from(document.querySelectorAll('h2'));
+  const support = heads.find(h => /Operators, assistants and reception/i.test(h.textContent));
+  if (!support) return 'no support heading';
+  const card = Array.from(document.querySelectorAll('a[href^="/staff/"]'))
+    .find(x => x.innerText.includes('Meghan H.'));
+  if (!card) return 'no card';
+  /* The card must come after the heading in document order. */
+  return (support.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING) ? true : 'above the heading';
+})()`));
+const meghan = await cardFor("Meghan H.");
+check("the operator's card says Operator", /Operator/.test(meghan), meghan);
+check("her turnover is still shown, not hidden by the move",
+  /R 70[0-9] ?9?\d*/.test(meghan) || /R \d{3} \d{3}/.test(meghan), meghan);
+const headline = await text();
+check("the salon's takings do not fall because someone was re-designated",
+  /R 7 136 278/.test(headline),
+  (headline.match(/TEAM TURNOVER R [\d ]+/i) ?? [""])[0]);
+await shot("r6-operator-with-support");
+
+// ------------------------- the reports picker: real designations, inactive kept
+await send("Page.navigate", { url: BASE + "/reports" });
+await until(`!!document.querySelector('button[aria-label="Staff"]')`);
+await sleep(1500);
+await ev(`document.querySelector('button[aria-label="Staff"]')?.click(), true`);
+await sleep(800);
+const pickerRows = await ev(`(() => {
+  const panel = document.querySelector('button[aria-label="Staff"]')?.parentElement;
+  return panel ? panel.innerText.replace(/\\u00a0/g," ").split("\\n").filter(Boolean) : [];
+})()`);
+const pickerText = (pickerRows ?? []).join(" | ");
+check("the picker shows the designation from Admin, not the old role",
+  /senior stylist/i.test(pickerText), pickerText.slice(0, 140));
+check("an operator is labelled operator there", /operator/i.test(pickerText),
+  (pickerText.match(/[A-Za-z. ]+operator/i) ?? [""])[0]);
+check("reports still offer staff who have left", /inactive/i.test(pickerText) ||
+  (pickerRows ?? []).length > 8, `${(pickerRows ?? []).length} rows`);
+await shot("r7-reports-picker");
+
 // --------------------------------------------- turning someone off takes them off
 await openAdminStaff();
 await ev(`(() => {
@@ -270,6 +321,59 @@ await sleep(1600);
 check("she is off the team screen once inactive", (await cardFor("Thandi Nkosi")) === "");
 check("the rest of the team is untouched", (await cardFor("Karin M.")).includes("Senior stylist"));
 await shot("r5-inactive-drops-off");
+
+/*
+ * The till must not offer someone who has been turned off, while reports must
+ * still reach them — their past work is on the books.
+ */
+await send("Page.navigate", { url: BASE + "/till" });
+await until(`!!document.querySelector('button[aria-pressed]')`);
+await sleep(1500);
+await ev(`(() => {
+  const t = Array.from(document.querySelectorAll('button[aria-pressed]'))
+    .find(b => b.textContent.trim().toLowerCase().startsWith('services'));
+  if (t) { t.click(); return true; } return false;
+})()`);
+await until(`!!document.querySelector('[data-catalogue] li button')`);
+await sleep(900);
+await ev(`document.querySelectorAll('[data-catalogue] li button')[0]?.click(), true`);
+await sleep(1200);
+await ev(`document.querySelector('button[title="Change the stylist, quantity or discount"]')?.click(), true`);
+await sleep(900);
+const afterOff = await ev(`(() => {
+  const sel = Array.from(document.querySelectorAll('select'))
+    .find(s => (s.getAttribute('aria-label') ?? '').startsWith('Stylist for'));
+  return sel ? Array.from(sel.options).map(o => o.textContent.trim()) : [];
+})()`);
+check("the till no longer offers her once she is inactive",
+  !(afterOff ?? []).includes("Thandi Nkosi") && (afterOff ?? []).length > 5,
+  `${(afterOff ?? []).length} on offer`);
+const tipsAfterOff = await ev(`(() => {
+  const add = Array.from(document.querySelectorAll('button')).find(b => /add tip/i.test(b.textContent));
+  if (add) add.click();
+  return true;
+})()`);
+await sleep(800);
+const tipNames = await ev(`(() => {
+  const s = document.querySelector('[aria-label="Who is the tip for"]');
+  return s ? Array.from(s.options).map(o => o.textContent.trim()) : [];
+})()`);
+check("nor offers her a tip", tipsAfterOff === true && !(tipNames ?? []).some((t) => t.startsWith("Thandi Nkosi")),
+  `${(tipNames ?? []).length} operators offered`);
+await shot("r8-till-excludes-inactive");
+
+await send("Page.navigate", { url: BASE + "/reports" });
+await until(`!!document.querySelector('button[aria-label="Staff"]')`);
+await sleep(1500);
+await ev(`document.querySelector('button[aria-label="Staff"]')?.click(), true`);
+await sleep(800);
+const reportRows = await ev(`(() => {
+  const panel = document.querySelector('button[aria-label="Staff"]')?.parentElement;
+  return panel ? panel.innerText.replace(/\\u00a0/g," ") : "";
+})()`);
+check("reports still reach staff who have left", /inactive/i.test(reportRows ?? ""),
+  ((reportRows ?? "").match(/[A-Za-z. ]+· inactive/) ?? [""])[0]);
+await shot("r9-reports-keeps-inactive");
 
 console.log(results.join("\n"));
 console.log(

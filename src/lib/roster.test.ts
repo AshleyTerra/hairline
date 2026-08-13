@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blankStats, isSupport, member, operators, roster } from "./roster";
+import { blankStats, creditable, isSupport, member, roster } from "./roster";
 import type { StaffRecord } from "./staffAdmin";
 import type { Staff } from "./types";
 
@@ -29,7 +29,8 @@ const HISTORY: Staff[] = [
 ];
 
 describe("who counts as support", () => {
-  it("treats assistants, apprentices and reception as support", () => {
+  it("treats operators, assistants, apprentices and reception as support", () => {
+    expect(isSupport("Operator")).toBe(true);
     expect(isSupport("Assistant")).toBe(true);
     expect(isSupport("Apprentice")).toBe(true);
     expect(isSupport("Reception")).toBe(true);
@@ -38,7 +39,7 @@ describe("who counts as support", () => {
   it("treats anyone billed for their own work as a stylist", () => {
     expect(isSupport("Senior stylist")).toBe(false);
     expect(isSupport("Stylist")).toBe(false);
-    expect(isSupport("Operator")).toBe(false);
+    expect(isSupport("Junior stylist")).toBe(false);
     expect(isSupport("Colour technician")).toBe(false);
   });
 });
@@ -83,6 +84,12 @@ describe("the roster", () => {
     expect(cynthia!.support).toBe(false);
   });
 
+  it("keeps an operator with the support staff, not the stylists", () => {
+    const asOperator = RECORDS.map((r) => (r.id === 1 ? { ...r, designation: "Operator" } : r));
+    const karin = roster(asOperator, HISTORY).find((m) => m.id === 1);
+    expect(karin!.support).toBe(true);
+  });
+
   it("does not invent people who have history but no record", () => {
     const orphan = [...HISTORY, history({ id: 99, name: "Gone A." })];
     expect(roster(RECORDS, orphan).map((m) => m.id)).toEqual([1, 11, 68]);
@@ -91,12 +98,12 @@ describe("the roster", () => {
 
 describe("who can be credited or tipped", () => {
   it("offers everyone but reception", () => {
-    expect(operators(roster(RECORDS, HISTORY)).map((m) => m.id)).toEqual([1, 11]);
+    expect(creditable(roster(RECORDS, HISTORY)).map((m) => m.id)).toEqual([1, 11]);
   });
 
   it("offers a new stylist straight away", () => {
     const withNew = [...RECORDS, record({ id: 82, name: "Nomsa Dlamini" })];
-    expect(operators(roster(withNew, HISTORY)).map((m) => m.id)).toContain(82);
+    expect(creditable(roster(withNew, HISTORY)).map((m) => m.id)).toContain(82);
   });
 });
 

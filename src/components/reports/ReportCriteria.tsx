@@ -1,7 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import { meta, staff } from "@/lib/data";
 import { catalogueDepts, catalogueItems, reportsFrom } from "@/lib/salesSource";
+import { useStore } from "@/lib/store";
 import { MultiSelect } from "./MultiSelect";
 
 export type ReportKind = "staffTurnover" | "dailyStaffTurnover" | "itemTracking";
@@ -50,7 +52,31 @@ interface ReportCriteriaProps {
  * report type, the dates to report between, and what to report on.
  */
 export function ReportCriteria({ state, onChange, error }: ReportCriteriaProps) {
-  const reportable = staff.filter((s) => s.role !== "reception");
+  /**
+   * Everyone a report could turn up: the staff records, plus anyone in the
+   * migrated history who has no record. The inactive stay on the list and are
+   * marked as such — they have left, but their past work is still on the books,
+   * which is exactly what a report over last year has to account for.
+   */
+  const { staffRecords } = useStore();
+  const reportable = useMemo(() => {
+    const known = new Set(staffRecords.map((r) => r.id));
+    const fromRecords = staffRecords.map((r) => ({
+      id: r.id,
+      name: r.name,
+      designation: r.designation,
+      active: r.active,
+    }));
+    const historyOnly = staff
+      .filter((s) => !known.has(s.id))
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        designation: s.role === "assistant" ? "Assistant" : "Stylist",
+        active: false,
+      }));
+    return [...fromRecords, ...historyOnly].filter((s) => !/reception/i.test(s.designation));
+  }, [staffRecords]);
   const field = "rounded border border-hairline bg-paper px-2.5 py-1.5 text-sm text-ink";
   const legend =
     "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-mutedink";
@@ -116,7 +142,9 @@ export function ReportCriteria({ state, onChange, error }: ReportCriteriaProps) 
               items={reportable.map((s) => ({
                 id: s.id,
                 label: s.name,
-                note: s.role === "assistant" ? "assistant" : undefined,
+                note: s.active
+                  ? s.designation.toLowerCase()
+                  : `${s.designation.toLowerCase()} · inactive`,
               }))}
               selected={state.selected}
               onChange={(ids) => onChange({ selected: ids.map(Number) })}
