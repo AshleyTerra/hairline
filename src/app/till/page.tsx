@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { Suspense, useEffect, useMemo, useReducer, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ClientPicker } from "@/components/till/ClientPicker";
 import { ItemCatalogue } from "@/components/till/ItemCatalogue";
 import { TipPanel } from "@/components/till/TipPanel";
@@ -22,10 +23,34 @@ import type { Client, PaymentMethod, Product, Service, TillLine } from "@/lib/ty
 let lineCounter = 0;
 const nextKey = () => `line-${(lineCounter += 1)}`;
 
+/**
+ * The counter. Wrapped in Suspense because it reads the query string: arriving
+ * from the diary, /till?docket=93712 says whose docket to bring to the counter.
+ */
 export default function TillPage() {
+  return (
+    <Suspense fallback={null}>
+      <TillCounter />
+    </Suspense>
+  );
+}
+
+function TillCounter() {
   const { invoices, addInvoice, dockets, setDockets, addClient, staffRecords } = useStore();
-  const [till, dispatch] = useReducer(tillReduce, undefined, emptyTill);
-  const [docketNo, setDocketNo] = useState<number | null>(null);
+  const params = useSearchParams();
+
+  /* Read once, as the screen opens — later renders must not reopen it. */
+  const arriving = useMemo(() => {
+    const asked = Number(params.get("docket"));
+    return Number.isFinite(asked) && asked > 0 && findDocket(dockets, asked) ? asked : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [till, dispatch] = useReducer(tillReduce, arriving, (number) => {
+    const waiting = number != null ? findDocket(dockets, number) : undefined;
+    return waiting ? waiting.state : emptyTill();
+  });
+  const [docketNo, setDocketNo] = useState<number | null>(arriving);
   const [addingClient, setAddingClient] = useState(false);
   const [slip, setSlip] = useState<InvoiceSlipData | null>(null);
   const [saved, setSaved] = useState<{ number: number; owing: number; client: string } | null>(
@@ -67,6 +92,11 @@ export default function TillPage() {
     // `dockets` is deliberately omitted: including it would loop on its own write.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [till, docketNo]);
+
+  /* The address bar is tidied once the docket is on the counter. */
+  useEffect(() => {
+    if (arriving != null) window.history.replaceState({}, "", "/till");
+  }, [arriving]);
 
   /**
    * Who a line can be credited to, and who can be tipped: whoever is on the

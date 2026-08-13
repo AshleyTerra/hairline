@@ -5,6 +5,7 @@ import { demoNow } from "./clock";
 import type { PlayInvoice, Role } from "./types";
 import { type SignedInUser } from "./auth";
 import type { Docket } from "./dockets";
+import type { BookedAppointment } from "./diary";
 import { DEFAULT_DESIGNATIONS, type StaffRecord } from "./staffAdmin";
 import type { StockDraft } from "./stockAdmin";
 import staffData from "@/data/staff.json";
@@ -33,6 +34,7 @@ const DESIGNATIONS_KEY = "hairline-demo-designations";
 const ARCHIVED_KEY = "hairline-demo-archived-stock";
 const NEWSTOCK_KEY = "hairline-demo-new-stock";
 const NEWCLIENTS_KEY = "hairline-demo-new-clients";
+const APPOINTMENTS_KEY = "hairline-demo-appointments";
 
 interface DemoState {
   user: SignedInUser | null;
@@ -46,6 +48,8 @@ interface DemoState {
   dockets: Docket[];
   /** Clients added at the till during the demo. */
   newClients: NewClient[];
+  /** Appointments reception has booked into the diary. */
+  appointments: BookedAppointment[];
   /** Editable staff records, seeded from the migrated staff file. */
   staffRecords: StaffRecord[];
   designations: string[];
@@ -67,6 +71,7 @@ const SERVER_STATE: DemoState = {
   importedClients: [],
   dockets: [],
   newClients: [],
+  appointments: [],
   staffRecords: seedStaffRecords(),
   designations: [...DEFAULT_DESIGNATIONS],
   archivedStock: [],
@@ -118,6 +123,7 @@ class DemoStore {
         importedClients: read<ImportedClient[]>(IMPORTED_KEY, []),
         dockets: read<Docket[]>(DOCKETS_KEY, []),
         newClients: read<NewClient[]>(NEWCLIENTS_KEY, []),
+        appointments: read<BookedAppointment[]>(APPOINTMENTS_KEY, []),
         staffRecords: read<StaffRecord[]>(STAFFREC_KEY, seedStaffRecords()),
         designations: read<string[]>(DESIGNATIONS_KEY, [...DEFAULT_DESIGNATIONS]),
         archivedStock: read<number[]>(ARCHIVED_KEY, []),
@@ -213,6 +219,29 @@ class DemoStore {
     return created;
   }
 
+  /** Puts a booking in the diary. */
+  addAppointment(booking: BookedAppointment) {
+    const appointments = [...this.getSnapshot().appointments, booking];
+    write(APPOINTMENTS_KEY, appointments);
+    this.set({ appointments });
+  }
+
+  /** Notes something against a booking — the docket opened for it, say. */
+  updateAppointment(id: string, patch: Partial<BookedAppointment>) {
+    const appointments = this.getSnapshot().appointments.map((a) =>
+      a.id === id ? { ...a, ...patch } : a
+    );
+    write(APPOINTMENTS_KEY, appointments);
+    this.set({ appointments });
+  }
+
+  /** Takes one out again — the client cancelled, or it was a mistake. */
+  cancelAppointment(id: string) {
+    const appointments = this.getSnapshot().appointments.filter((a) => a.id !== id);
+    write(APPOINTMENTS_KEY, appointments);
+    this.set({ appointments });
+  }
+
   setStaffRecords(staffRecords: StaffRecord[]) {
     write(STAFFREC_KEY, staffRecords);
     this.set({ staffRecords });
@@ -268,6 +297,7 @@ class DemoStore {
     write(IMPORTED_KEY, []);
     write(DOCKETS_KEY, []);
     write(NEWCLIENTS_KEY, []);
+    write(APPOINTMENTS_KEY, []);
     write(STAFFREC_KEY, seedStaffRecords());
     write(DESIGNATIONS_KEY, [...DEFAULT_DESIGNATIONS]);
     write(ARCHIVED_KEY, []);
@@ -279,6 +309,7 @@ class DemoStore {
       importedClients: [],
       dockets: [],
       newClients: [],
+      appointments: [],
       staffRecords: seedStaffRecords(),
       designations: [...DEFAULT_DESIGNATIONS],
       archivedStock: [],
@@ -355,6 +386,12 @@ export function useStore() {
     (input: Omit<NewClient, "id">) => store.addClient(input),
     []
   );
+  const addAppointment = useCallback((b: BookedAppointment) => store.addAppointment(b), []);
+  const cancelAppointment = useCallback((id: string) => store.cancelAppointment(id), []);
+  const updateAppointment = useCallback(
+    (id: string, patch: Partial<BookedAppointment>) => store.updateAppointment(id, patch),
+    []
+  );
 
   return useMemo(
     () => ({
@@ -367,6 +404,7 @@ export function useStore() {
       importedClients: state.importedClients,
       dockets: state.dockets,
       newClients: state.newClients,
+      appointments: state.appointments,
       staffRecords: state.staffRecords,
       designations: state.designations,
       archivedStock: state.archivedStock,
@@ -385,6 +423,9 @@ export function useStore() {
       resetDemo,
       setDockets,
       addClient,
+      addAppointment,
+      cancelAppointment,
+      updateAppointment,
       setStaffRecords,
       setDesignations,
       setArchivedStock,
@@ -392,6 +433,6 @@ export function useStore() {
       clearNewStock,
     }),
     [state, signIn, signOut, setRole, setStylistId, addInvoice, clearInvoices, setUsers,
-     setPermissions, addImportedClients, clearImportedClients, resetDemo, setDockets, addClient, setStaffRecords, setDesignations, setArchivedStock, addStock, clearNewStock]
+     setPermissions, addImportedClients, clearImportedClients, resetDemo, setDockets, addClient, addAppointment, cancelAppointment, updateAppointment, setStaffRecords, setDesignations, setArchivedStock, addStock, clearNewStock]
   );
 }
