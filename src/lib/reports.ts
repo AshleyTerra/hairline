@@ -70,6 +70,14 @@ export function splitTotals(lines: readonly ReportLine[]): Split {
   };
 }
 
+/**
+ * Money the salon takes with nobody behind it — a gift voucher is paid for
+ * before any work is done, so it belongs to Hairline rather than to a stylist.
+ * MySalon calls this a stock sale; it reports under staff number 0.
+ */
+export const SALON_ID = 0;
+export const SALON_NAME = "Hairline (salon)";
+
 export function addRow(a: Split, b: Split): Split {
   return {
     services: round(a.services + b.services),

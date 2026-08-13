@@ -2,11 +2,12 @@
 
 import { useMemo } from "react";
 import { meta, staff } from "@/lib/data";
+import { SALON_ID, SALON_NAME } from "@/lib/reports";
 import { catalogueDepts, catalogueItems, reportsFrom } from "@/lib/salesSource";
 import { useStore } from "@/lib/store";
 import { MultiSelect } from "./MultiSelect";
 
-export type ReportKind = "staffTurnover" | "dailyStaffTurnover" | "itemTracking";
+export type ReportKind = "staffTurnover" | "dailyStaffTurnover" | "itemTracking" | "vouchers";
 
 export const REPORTS: { key: ReportKind; label: string; blurb: string }[] = [
   {
@@ -23,6 +24,12 @@ export const REPORTS: { key: ReportKind; label: string; blurb: string }[] = [
     key: "itemTracking",
     label: "Item tracking (product & vendor sales)",
     blurb: "Every sale of an item: invoice, date, client, staff, department and quantity.",
+  },
+  {
+    key: "vouchers",
+    label: "Vouchers report",
+    blurb:
+      "Vouchers sold in the period: who bought it, who it is for, and what is still outstanding.",
   },
 ];
 
@@ -75,7 +82,16 @@ export function ReportCriteria({ state, onChange, error }: ReportCriteriaProps) 
         designation: s.role === "assistant" ? "Assistant" : "Stylist",
         active: false,
       }));
-    return [...fromRecords, ...historyOnly].filter((s) => !/reception/i.test(s.designation));
+    /* Hairline itself: a voucher is paid for before anyone has done the work. */
+    const salon = {
+      id: SALON_ID,
+      name: SALON_NAME,
+      designation: "salon sales",
+      active: true,
+    };
+    return [salon, ...fromRecords, ...historyOnly].filter(
+      (s) => !/reception/i.test(s.designation)
+    );
   }, [staffRecords]);
   const field = "rounded border border-hairline bg-paper px-2.5 py-1.5 text-sm text-ink";
   const legend =

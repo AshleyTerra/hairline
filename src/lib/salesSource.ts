@@ -65,7 +65,8 @@ export function salesBetween(from: string, to: string, playInvoices: PlayInvoice
           price: l.price,
           disc: l.disc,
           stylistId: l.stylistId ?? 0,
-          kind: l.kind === "product" ? "product" : "service",
+          /* A voucher is a Hairline sale, so it stays out of services. */
+          kind: l.kind === "product" ? "product" : l.kind === "stock" ? "stock" : "service",
         })),
       });
     }

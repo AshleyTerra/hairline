@@ -9,16 +9,27 @@ import { DocketBar } from "@/components/till/DocketBar";
 import { DayBook } from "@/components/till/DayBook";
 import { NewClientDialog } from "@/components/till/NewClientDialog";
 import { InvoiceSlip, type InvoiceSlipData } from "@/components/till/InvoiceSlip";
+import { VoucherDialog } from "@/components/till/VoucherDialog";
+import { RedeemVoucherDialog } from "@/components/till/RedeemVoucherDialog";
 import { closeDocket, findDocket, nextNumber, openDocket, saveDocket } from "@/lib/dockets";
 import { PaymentPanel } from "@/components/till/PaymentPanel";
 import { GlobalSearch } from "@/components/till/GlobalSearch";
 import { demoday, getClient, getStaff, meta, staff } from "@/lib/data";
 import { initials, longDate, zar, zar0 } from "@/lib/format";
-import { demoNow } from "@/lib/clock";
+import { demoNow, demoToday } from "@/lib/clock";
 import { creditable, roster } from "@/lib/roster";
 import { useStore } from "@/lib/store";
 import { elapsedSeconds, emptyTill, tillReduce, totals as computeTotals } from "@/lib/till";
-import type { Client, PaymentMethod, Product, Service, TillLine } from "@/lib/types";
+import {
+  checkRedemption,
+  issueVoucher,
+  nextVoucherNumber,
+  redeem as redeemVoucher,
+  voucherLine,
+  type Voucher,
+  type VoucherDraft,
+} from "@/lib/vouchers";
+import type { Client, Payment, PaymentMethod, Product, Service, TillLine } from "@/lib/types";
 
 let lineCounter = 0;
 const nextKey = () => `line-${(lineCounter += 1)}`;
@@ -36,7 +47,17 @@ export default function TillPage() {
 }
 
 function TillCounter() {
-  const { invoices, addInvoice, dockets, setDockets, addClient, staffRecords } = useStore();
+  const {
+    invoices,
+    addInvoice,
+    dockets,
+    setDockets,
+    addClient,
+    staffRecords,
+    vouchers,
+    addVouchers,
+    saveVoucher,
+  } = useStore();
   const params = useSearchParams();
 
   /* Read once, as the screen opens — later renders must not reopen it. */
@@ -62,6 +83,9 @@ function TillCounter() {
   const [method, setMethod] = useState<PaymentMethod>("card");
   const [amount, setAmount] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
+  const [sellingVoucher, setSellingVoucher] = useState(false);
+  const [redeeming, setRedeeming] = useState(false);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
 
   const totals = useMemo(() => computeTotals(till), [till]);
   const seconds = elapsedSeconds(till, now);
@@ -241,13 +265,56 @@ function TillCounter() {
     });
   }
 
-  /** Captures the typed amount, then completes if that clears the balance. */
+  /**
+   * Captures the typed amount, then completes if that clears the balance. A part
+   * payment stays on the docket so the rest can go on another method — cash and
+   * card on the same sale is routine.
+   */
   function tender() {
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) return;
     const next = tillReduce(till, { type: "pay", payment: { method, amount: value } });
     dispatch({ type: "pay", payment: { method, amount: value } });
     setAmount("");
+    if (computeTotals(next).balance <= 0) complete(next);
+  }
+
+  /** Puts a voucher on the sale to be sold, priced as a Hairline stock line. */
+  function addVoucherLine(draft: VoucherDraft) {
+    const check = issueVoucher(vouchers, draft, {
+      clientId: till.clientId,
+      clientName: till.clientName ?? "Walk-in",
+      on: demoToday(),
+    });
+    if (!check.ok) {
+      setVoucherError(check.error);
+      return;
+    }
+    dispatch({ type: "add", line: voucherLine(draft, nextKey()), at: Date.now() });
+    setSellingVoucher(false);
+    setVoucherError(null);
+  }
+
+  /**
+   * Takes a voucher as payment. It is a promise against the docket until the sale
+   * completes, checked against anything already taken off the same voucher here.
+   */
+  function takeVoucher(voucher: Voucher, value: number) {
+    const pending = till.payments
+      .filter((p) => p.voucherNumber === voucher.number)
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    const check = checkRedemption(voucher, value, demoToday(), pending);
+    if (!check.ok) {
+      setVoucherError(check.error);
+      return;
+    }
+
+    const payment: Payment = { method: "voucher", amount: value, voucherNumber: voucher.number };
+    const next = tillReduce(till, { type: "pay", payment });
+    dispatch({ type: "pay", payment });
+    setRedeeming(false);
+    setVoucherError(null);
     if (computeTotals(next).balance <= 0) complete(next);
   }
 
@@ -258,6 +325,35 @@ function TillCounter() {
     // The docket's number becomes the invoice number.
     const number = docketNo ?? nextNumber(dockets, meta.lastInvoiceNumber);
     const client = getClient(state.clientId);
+
+    /*
+     * Vouchers on the sale become real vouchers now the money is in. The draft
+     * rides on the line, so a docket parked half-finished still issues correctly.
+     */
+    const issued: Voucher[] = [];
+    for (const line of state.lines) {
+      if (!line.voucher) continue;
+      const result = issueVoucher([...vouchers, ...issued], line.voucher, {
+        clientId: state.clientId,
+        clientName: state.clientName ?? "Walk-in",
+        on: demoToday(),
+        invoice: number,
+      });
+      if (result.ok) issued.push(result.voucher);
+    }
+    if (issued.length > 0) addVouchers(issued);
+
+    /*
+     * Vouchers are only drawn down now. Up to this point a voucher payment is a
+     * promise on the docket, so a sale that is voided leaves the card untouched.
+     */
+    for (const payment of state.payments) {
+      if (payment.voucherNumber == null) continue;
+      const held = vouchers.find((v) => v.number === payment.voucherNumber);
+      if (!held) continue;
+      const drawn = redeemVoucher(held, payment.amount, demoToday(), number);
+      if (drawn.ok) saveVoucher(drawn.voucher);
+    }
     setSlip({
       number,
       date: demoNow(),
@@ -446,7 +542,10 @@ function TillCounter() {
                             onClick={() => setEditing(editing === line.key ? null : line.key)}
                             className="text-left text-[11.5px] text-faintink hover:text-taupe-deep"
                           >
-                            {stylist?.name ?? "No stylist"} · Qty {line.qty}
+                            {line.kind === "stock"
+                              ? "Hairline sale"
+                              : (stylist?.name ?? "No stylist")}{" "}
+                            · Qty {line.qty}
                             {line.disc > 0 ? ` · ${line.disc}% off` : ""}
                           </button>
                         </div>
@@ -544,6 +643,21 @@ function TillCounter() {
             )}
           </div>
 
+          {/* A voucher goes on the docket alongside the cut and the shampoo. */}
+          <div className="flex shrink-0 items-center gap-3 border-t border-edge-faint px-5 py-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                setVoucherError(null);
+                setSellingVoucher(true);
+              }}
+              className="text-[12px] font-semibold text-taupe transition-colors hover:text-taupe-deep"
+            >
+              + Gift voucher
+            </button>
+            <span className="text-[11px] text-faintink">Sold as a Hairline sale, no stylist</span>
+          </div>
+
           {hasLines && (
             <>
               <TipPanel
@@ -606,8 +720,14 @@ function TillCounter() {
 
               <PaymentPanel
                 totals={totals}
+                taken={till.payments}
                 method={method}
                 onMethod={setMethod}
+                onRedeemVoucher={() => {
+                  setMethod("voucher");
+                  setVoucherError(null);
+                  setRedeeming(true);
+                }}
                 amount={amount}
                 onAmount={setAmount}
                 onKey={pressKey}
@@ -619,6 +739,33 @@ function TillCounter() {
           )}
         </aside>
       </div>
+
+      {sellingVoucher && (
+        <VoucherDialog
+          today={demoToday()}
+          nextNumber={nextVoucherNumber(vouchers)}
+          error={voucherError}
+          onAdd={addVoucherLine}
+          onClose={() => {
+            setSellingVoucher(false);
+            setVoucherError(null);
+          }}
+        />
+      )}
+
+      {redeeming && (
+        <RedeemVoucherDialog
+          vouchers={vouchers}
+          owing={totals.balance}
+          today={demoToday()}
+          error={voucherError}
+          onRedeem={takeVoucher}
+          onClose={() => {
+            setRedeeming(false);
+            setVoucherError(null);
+          }}
+        />
+      )}
 
       {addingClient && (
         <NewClientDialog

@@ -200,6 +200,12 @@ export type PaymentMethod = "cash" | "card" | "eft" | "topay" | "voucher";
 export interface Payment {
   method: PaymentMethod;
   amount: number;
+  /**
+   * Set when the payment is a voucher. The voucher is only drawn down once the
+   * sale completes, so removing the payment — or voiding the sale — leaves the
+   * client's balance untouched.
+   */
+  voucherNumber?: number;
 }
 
 export interface TillLine {
@@ -209,8 +215,20 @@ export interface TillLine {
   qty: number;
   disc: number;
   stylistId: number | null;
-  kind: "service" | "product";
+  /** "stock" is a Hairline sale — a voucher, say — with no stylist behind it. */
+  kind: "service" | "product" | "stock";
   mins?: number;
+  /**
+   * Set on a voucher line. The voucher itself is issued when the sale completes,
+   * so a docket parked half-finished keeps everything needed to issue it later.
+   */
+  voucher?: {
+    recipientName: string;
+    recipientTel: string;
+    amount: number;
+    expires: string;
+    barcode: string;
+  };
 }
 
 export interface Tip {

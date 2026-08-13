@@ -12,6 +12,8 @@ import { longDate, shortDate, zar } from "@/lib/format";
 import { PrintArea } from "@/components/PrintArea";
 import { downloadTableCsv, downloadXlsx, printReport, reportFilename } from "@/lib/exportFile";
 import {
+  SALON_ID,
+  SALON_NAME,
   itemTracking,
   itemTrackingTotals,
   staffTurnover,
@@ -20,6 +22,7 @@ import {
   type LineKind,
 } from "@/lib/reports";
 import { catalogue, salesBetween } from "@/lib/salesSource";
+import { voucherReport, voucherTotals } from "@/lib/vouchers";
 import { useStore } from "@/lib/store";
 
 /** A fortnight back from the demo day is a sensible default period. */
@@ -38,13 +41,16 @@ const CATEGORIES = [
 
 const RETAIL_KINDS: LineKind[] = ["product", "stock"];
 
+/** The salon reports under number 0, so its own sales have a name. */
+const nameFor = (id: number) => (id === SALON_ID ? SALON_NAME : (getStaff(id)?.name ?? ""));
+
 export default function ReportsPage() {
-  const { invoices } = useStore();
+  const { invoices, vouchers } = useStore();
   const [state, setState] = useState<CriteriaState>({
     kind: "staffTurnover",
     from: defaultFrom,
     to: meta.demoDate,
-    selected: staff.filter((s) => s.role !== "reception").map((s) => s.id),
+    selected: [SALON_ID, ...staff.filter((s) => s.role !== "reception").map((s) => s.id)],
     single: earningStylists[0]?.id ?? 1,
     depts: [],
     items: [],
@@ -95,7 +101,7 @@ export default function ReportsPage() {
   const report = REPORTS.find((r) => r.key === kind);
   const period = from === to ? longDate(from) : `${longDate(from)} to ${longDate(to)}`;
   const subject =
-    kind === "dailyStaffTurnover" ? (getStaff(state.single)?.name ?? "Staff member") : "";
+    kind === "dailyStaffTurnover" ? (nameFor(state.single) || "Staff member") : "";
 
   // ------------------------------------------------------------- exporting
   const turnoverExport = useMemo(
@@ -103,7 +109,7 @@ export default function ReportsPage() {
       (kind === "staffTurnover" ? staffRows : dailyRows).map((r) => ({
         label:
           "stylistId" in r
-            ? `${r.stylistId} ${getStaff(r.stylistId)?.name ?? ""}`.trim()
+            ? `${r.stylistId} ${nameFor(r.stylistId)}`.trim()
             : r.date,
         servicesEx: r.exVat.services,
         servicesIncl: r.inclVat.services,
@@ -135,7 +141,7 @@ export default function ReportsPage() {
         invoice: r.invoice,
         date: r.date,
         client: r.client,
-        staff: getStaff(r.stylistId)?.name ?? "",
+        staff: nameFor(r.stylistId),
         deptNo: r.deptNo,
         dept: r.dept,
         itemNo: r.itemNo,
@@ -161,20 +167,64 @@ export default function ReportsPage() {
     { key: "value" as const, label: "Line value" },
   ];
 
+  // ------------------------------------------------------------- vouchers
+  const voucherRows = useMemo(
+    () => (kind === "vouchers" ? voucherReport(vouchers, from, to) : []),
+    [kind, vouchers, from, to]
+  );
+  const voucherSums = useMemo(() => voucherTotals(voucherRows), [voucherRows]);
+
+  const voucherExport = useMemo(
+    () =>
+      voucherRows.map((r) => ({
+        number: r.number,
+        barcode: r.barcode,
+        client: r.client,
+        purchased: r.purchased,
+        recipient: r.recipient,
+        tel: r.tel,
+        amount: r.amount,
+        used: r.used,
+        outstanding: r.outstanding,
+        expires: r.expires,
+      })),
+    [voucherRows]
+  );
+
+  const voucherColumns = [
+    { key: "number" as const, label: "Voucher number" },
+    { key: "barcode" as const, label: "Barcode" },
+    { key: "client" as const, label: "Client" },
+    { key: "purchased" as const, label: "Purchased" },
+    { key: "recipient" as const, label: "Recipient name" },
+    { key: "tel" as const, label: "Recipient cell" },
+    { key: "amount" as const, label: "Amount" },
+    { key: "used" as const, label: "Used" },
+    { key: "outstanding" as const, label: "Outstanding" },
+    { key: "expires" as const, label: "Expires" },
+  ];
+
   const isItems = kind === "itemTracking";
+  const isVouchers = kind === "vouchers";
   const slug =
     kind === "staffTurnover"
       ? "staff-turnover"
       : kind === "dailyStaffTurnover"
         ? "daily-staff-turnover"
-        : "item-tracking";
+        : kind === "vouchers"
+          ? "vouchers"
+          : "item-tracking";
   const heading = [
     `${report?.label ?? "Report"} — Hairline`,
     `${period}${subject ? ` · ${subject}` : ""}`,
     `Created ${longDate(meta.demoDate)}`,
   ];
 
-  const rowCount = isItems ? itemRows.length : turnoverRows.length;
+  const rowCount = isItems
+    ? itemRows.length
+    : isVouchers
+      ? voucherRows.length
+      : turnoverRows.length;
 
   return (
     <>
@@ -203,14 +253,18 @@ export default function ReportsPage() {
               ? downloadXlsx(reportFilename(slug, from, to, "xlsx"), [
                   { name: "Item tracking", rows: itemExport, columns: itemColumns, heading },
                 ])
-              : downloadXlsx(reportFilename(slug, from, to, "xlsx"), [
-                  {
-                    name: report?.label ?? "Report",
-                    rows: turnoverExport,
-                    columns: turnoverColumns,
-                    heading,
-                  },
-                ])
+              : isVouchers
+                ? downloadXlsx(reportFilename(slug, from, to, "xlsx"), [
+                    { name: "Vouchers", rows: voucherExport, columns: voucherColumns, heading },
+                  ])
+                : downloadXlsx(reportFilename(slug, from, to, "xlsx"), [
+                    {
+                      name: report?.label ?? "Report",
+                      rows: turnoverExport,
+                      columns: turnoverColumns,
+                      heading,
+                    },
+                  ])
           }
           className="rounded border border-taupe px-4 py-2 text-sm font-semibold text-taupe-deep hover:bg-chip disabled:opacity-40"
         >
@@ -222,11 +276,17 @@ export default function ReportsPage() {
           onClick={() =>
             isItems
               ? downloadTableCsv(reportFilename(slug, from, to, "csv"), itemExport, itemColumns)
-              : downloadTableCsv(
-                  reportFilename(slug, from, to, "csv"),
-                  turnoverExport,
-                  turnoverColumns
-                )
+              : isVouchers
+                ? downloadTableCsv(
+                    reportFilename(slug, from, to, "csv"),
+                    voucherExport,
+                    voucherColumns
+                  )
+                : downloadTableCsv(
+                    reportFilename(slug, from, to, "csv"),
+                    turnoverExport,
+                    turnoverColumns
+                  )
           }
           className="rounded border border-hairline px-4 py-2 text-sm font-semibold text-mutedink hover:text-ink disabled:opacity-40"
         >
@@ -252,7 +312,66 @@ export default function ReportsPage() {
         </header>
 
         <TableScroll>
-          {isItems ? (
+          {isVouchers ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-hairline text-left text-[11px] uppercase tracking-[0.06em] text-mutedink">
+                  <th className="px-3 py-2.5 font-semibold">Voucher no.</th>
+                  <th className="px-3 py-2.5 font-semibold">Client</th>
+                  <th className="px-3 py-2.5 font-semibold">Purchased</th>
+                  <th className="px-3 py-2.5 font-semibold">Recipient</th>
+                  <th className="px-3 py-2.5 font-semibold">Recipient cell</th>
+                  <th className="px-3 py-2.5 font-semibold">Expires</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Amount</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Used</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody>
+                {voucherRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-10 text-center text-mutedink">
+                      {error ?? "No vouchers were sold in this period."}
+                    </td>
+                  </tr>
+                ) : (
+                  voucherRows.map((r) => (
+                    <tr key={r.number} className="border-b border-hairline-soft last:border-0">
+                      <td className="tnum px-3 py-2 text-mutedink">{r.number}</td>
+                      <td className="px-3 py-2 text-ink">{r.client}</td>
+                      <td className="px-3 py-2 text-mutedink">{shortDate(r.purchased)}</td>
+                      <td className="px-3 py-2 text-ink">{r.recipient}</td>
+                      <td className="tnum px-3 py-2 text-mutedink">{r.tel || "—"}</td>
+                      <td className="px-3 py-2 text-mutedink">{shortDate(r.expires)}</td>
+                      <td className="tnum px-3 py-2 text-right text-ink">{zar(r.amount)}</td>
+                      <td className="tnum px-3 py-2 text-right text-mutedink">{zar(r.used)}</td>
+                      <td className="tnum px-3 py-2 text-right font-semibold text-ink">
+                        {zar(r.outstanding)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {voucherRows.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-hairline font-semibold">
+                    <td className="px-3 py-2.5 text-ink" colSpan={6}>
+                      Total
+                    </td>
+                    <td className="tnum px-3 py-2.5 text-right text-ink">
+                      {zar(voucherSums.amount)}
+                    </td>
+                    <td className="tnum px-3 py-2.5 text-right text-ink">
+                      {zar(voucherSums.used)}
+                    </td>
+                    <td className="tnum px-3 py-2.5 text-right text-ink">
+                      {zar(voucherSums.outstanding)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          ) : isItems ? (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-hairline text-left text-[11px] uppercase tracking-[0.06em] text-mutedink">
@@ -285,7 +404,7 @@ export default function ReportsPage() {
                       <td className="px-3 py-2 text-mutedink">{shortDate(r.date)}</td>
                       <td className="px-3 py-2 text-ink">{r.client}</td>
                       <td className="px-3 py-2 text-mutedink">
-                        {getStaff(r.stylistId)?.name ?? "—"}
+                        {nameFor(r.stylistId) || "—"}
                       </td>
                       <td className="tnum px-3 py-2 text-mutedink">{r.deptNo}</td>
                       <td className="px-3 py-2 text-mutedink">{r.dept}</td>
@@ -347,7 +466,7 @@ export default function ReportsPage() {
                   turnoverRows.map((r) => {
                     const label =
                       "stylistId" in r
-                        ? `${r.stylistId} ${getStaff(r.stylistId)?.name ?? ""}`.trim()
+                        ? `${r.stylistId} ${nameFor(r.stylistId)}`.trim()
                         : longDate(r.date);
                     return (
                       <tr

@@ -6,6 +6,7 @@ import type { PlayInvoice, Role } from "./types";
 import { type SignedInUser } from "./auth";
 import type { Docket } from "./dockets";
 import type { BookedAppointment } from "./diary";
+import type { Voucher } from "./vouchers";
 import { DEFAULT_DESIGNATIONS, type StaffRecord } from "./staffAdmin";
 import type { StockDraft } from "./stockAdmin";
 import staffData from "@/data/staff.json";
@@ -35,6 +36,7 @@ const ARCHIVED_KEY = "hairline-demo-archived-stock";
 const NEWSTOCK_KEY = "hairline-demo-new-stock";
 const NEWCLIENTS_KEY = "hairline-demo-new-clients";
 const APPOINTMENTS_KEY = "hairline-demo-appointments";
+const VOUCHERS_KEY = "hairline-demo-vouchers";
 
 interface DemoState {
   user: SignedInUser | null;
@@ -50,6 +52,8 @@ interface DemoState {
   newClients: NewClient[];
   /** Appointments reception has booked into the diary. */
   appointments: BookedAppointment[];
+  /** Gift vouchers sold, with whatever is left on each. */
+  vouchers: Voucher[];
   /** Editable staff records, seeded from the migrated staff file. */
   staffRecords: StaffRecord[];
   designations: string[];
@@ -72,6 +76,7 @@ const SERVER_STATE: DemoState = {
   dockets: [],
   newClients: [],
   appointments: [],
+  vouchers: [],
   staffRecords: seedStaffRecords(),
   designations: [...DEFAULT_DESIGNATIONS],
   archivedStock: [],
@@ -124,6 +129,7 @@ class DemoStore {
         dockets: read<Docket[]>(DOCKETS_KEY, []),
         newClients: read<NewClient[]>(NEWCLIENTS_KEY, []),
         appointments: read<BookedAppointment[]>(APPOINTMENTS_KEY, []),
+        vouchers: read<Voucher[]>(VOUCHERS_KEY, []),
         staffRecords: read<StaffRecord[]>(STAFFREC_KEY, seedStaffRecords()),
         designations: read<string[]>(DESIGNATIONS_KEY, [...DEFAULT_DESIGNATIONS]),
         archivedStock: read<number[]>(ARCHIVED_KEY, []),
@@ -226,6 +232,23 @@ class DemoStore {
     this.set({ appointments });
   }
 
+  /** Issues vouchers sold on a completed sale. */
+  addVouchers(issued: Voucher[]) {
+    if (issued.length === 0) return;
+    const vouchers = [...this.getSnapshot().vouchers, ...issued];
+    write(VOUCHERS_KEY, vouchers);
+    this.set({ vouchers });
+  }
+
+  /** Writes a voucher back after a redemption. */
+  saveVoucher(voucher: Voucher) {
+    const vouchers = this.getSnapshot().vouchers.map((v) =>
+      v.number === voucher.number ? voucher : v
+    );
+    write(VOUCHERS_KEY, vouchers);
+    this.set({ vouchers });
+  }
+
   /** Notes something against a booking — the docket opened for it, say. */
   updateAppointment(id: string, patch: Partial<BookedAppointment>) {
     const appointments = this.getSnapshot().appointments.map((a) =>
@@ -298,6 +321,7 @@ class DemoStore {
     write(DOCKETS_KEY, []);
     write(NEWCLIENTS_KEY, []);
     write(APPOINTMENTS_KEY, []);
+    write(VOUCHERS_KEY, []);
     write(STAFFREC_KEY, seedStaffRecords());
     write(DESIGNATIONS_KEY, [...DEFAULT_DESIGNATIONS]);
     write(ARCHIVED_KEY, []);
@@ -310,6 +334,7 @@ class DemoStore {
       dockets: [],
       newClients: [],
       appointments: [],
+      vouchers: [],
       staffRecords: seedStaffRecords(),
       designations: [...DEFAULT_DESIGNATIONS],
       archivedStock: [],
@@ -388,6 +413,8 @@ export function useStore() {
   );
   const addAppointment = useCallback((b: BookedAppointment) => store.addAppointment(b), []);
   const cancelAppointment = useCallback((id: string) => store.cancelAppointment(id), []);
+  const addVouchers = useCallback((issued: Voucher[]) => store.addVouchers(issued), []);
+  const saveVoucher = useCallback((voucher: Voucher) => store.saveVoucher(voucher), []);
   const updateAppointment = useCallback(
     (id: string, patch: Partial<BookedAppointment>) => store.updateAppointment(id, patch),
     []
@@ -405,6 +432,7 @@ export function useStore() {
       dockets: state.dockets,
       newClients: state.newClients,
       appointments: state.appointments,
+      vouchers: state.vouchers,
       staffRecords: state.staffRecords,
       designations: state.designations,
       archivedStock: state.archivedStock,
@@ -426,6 +454,8 @@ export function useStore() {
       addAppointment,
       cancelAppointment,
       updateAppointment,
+      addVouchers,
+      saveVoucher,
       setStaffRecords,
       setDesignations,
       setArchivedStock,
@@ -433,6 +463,6 @@ export function useStore() {
       clearNewStock,
     }),
     [state, signIn, signOut, setRole, setStylistId, addInvoice, clearInvoices, setUsers,
-     setPermissions, addImportedClients, clearImportedClients, resetDemo, setDockets, addClient, addAppointment, cancelAppointment, updateAppointment, setStaffRecords, setDesignations, setArchivedStock, addStock, clearNewStock]
+     setPermissions, addImportedClients, clearImportedClients, resetDemo, setDockets, addClient, addAppointment, cancelAppointment, updateAppointment, addVouchers, saveVoucher, setStaffRecords, setDesignations, setArchivedStock, addStock, clearNewStock]
   );
 }

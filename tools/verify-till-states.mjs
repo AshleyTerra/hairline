@@ -130,10 +130,15 @@ await clickText("Card");
 await sleep(300);
 await keypad(["1", "0", "0"]);
 await sleep(500);
-await clickText("Take R 100 & complete");
+// A part payment now says what it does: "Take R 100 on card", not "& complete".
+await evaluate(`(() => {
+  const b = Array.from(document.querySelectorAll('button')).find(x => /^Take R 100/.test(x.textContent.trim()));
+  if (b) { b.click(); return b.textContent.trim(); } return false;
+})()`);
 await sleep(1200);
 text = await evaluate(`document.body.innerText.replace(/\\s+/g,' ')`);
 check("4 payment row shown", /card taken/i.test(text));
+check("4 the split so far is spelled out", /to go — choose another method/i.test(text));
 check("4 balance reduced", /balance/i.test(text));
 await shot("s4-partly-paid");
 

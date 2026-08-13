@@ -1,7 +1,7 @@
 "use client";
 
 import { zar } from "@/lib/format";
-import type { PaymentMethod, TillTotals } from "@/lib/types";
+import type { Payment, PaymentMethod, TillTotals } from "@/lib/types";
 
 const METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "card", label: "Card" },
@@ -16,8 +16,12 @@ const NOTES = [500, 200, 100, 50];
 
 interface PaymentPanelProps {
   totals: TillTotals;
+  /** Every payment taken so far, so a split sale reads at a glance. */
+  taken: readonly Payment[];
   method: PaymentMethod;
   onMethod: (method: PaymentMethod) => void;
+  /** Chosen "Voucher": reception looks the card up rather than typing a figure. */
+  onRedeemVoucher: () => void;
   amount: string;
   /** Sets the whole amount, e.g. from a quick-tender button. */
   onAmount: (amount: string) => void;
@@ -36,8 +40,10 @@ interface PaymentPanelProps {
  */
 export function PaymentPanel({
   totals,
+  taken,
   method,
   onMethod,
+  onRedeemVoucher,
   amount,
   onAmount,
   onKey,
@@ -46,16 +52,34 @@ export function PaymentPanel({
   onSave,
 }: PaymentPanelProps) {
   const owing = totals.balance > 0;
+  /** True when what is typed will not clear the balance — a part payment. */
+  const part = owing && Number(amount) > 0 && Number(amount) < totals.balance;
+  const methodLabel = METHODS.find((m) => m.value === method)?.label ?? method;
 
   return (
     <div className="px-5 pb-5 pt-4">
+      {/* What has been taken so far, when a sale is being split */}
+      {taken.length > 0 && owing && (
+        <p className="mb-3 rounded-[10px] bg-canvas px-3.5 py-2 text-[11.5px] text-taupe-deep">
+          Taken:{" "}
+          {taken.map((p, i) => (
+            <span key={`${p.method}-${i}`}>
+              {i > 0 ? " · " : ""}
+              <span className="capitalize">{p.method === "topay" ? "on account" : p.method}</span>{" "}
+              {zar(p.amount)}
+            </span>
+          ))}
+          . {zar(totals.balance)} to go — choose another method for the rest.
+        </p>
+      )}
+
       {/* Method */}
       <div className="mb-3 grid grid-cols-5 gap-[5px]">
         {METHODS.map((m) => (
           <button
             key={m.value}
             type="button"
-            onClick={() => onMethod(m.value)}
+            onClick={() => (m.value === "voucher" ? onRedeemVoucher() : onMethod(m.value))}
             aria-pressed={method === m.value}
             className={`rounded-[10px] py-2.5 text-center text-[11.5px] font-semibold transition-colors ${
               method === m.value
@@ -143,7 +167,9 @@ export function PaymentPanel({
         >
           {owing
             ? amount
-              ? `Take R ${amount} & complete`
+              ? part
+                ? `Take R ${amount} on ${methodLabel.toLowerCase()}`
+                : `Take R ${amount} & complete`
               : `${zar(totals.balance)} still owing`
             : `Complete sale — ${zar(totals.subtotal)}`}
         </button>
