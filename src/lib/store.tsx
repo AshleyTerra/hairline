@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { demoNow } from "./clock";
 import type { PlayInvoice, Role } from "./types";
 import { type SignedInUser } from "./auth";
 import type { Docket } from "./dockets";
@@ -182,7 +183,8 @@ class DemoStore {
   }
 
   addInvoice(invoice: Omit<PlayInvoice, "id" | "date">): PlayInvoice {
-    const created: PlayInvoice = { ...invoice, id: Date.now(), date: new Date().toISOString() };
+    /* Dated to the demo day, so the sale joins the takings it is counted in. */
+    const created: PlayInvoice = { ...invoice, id: Date.now(), date: demoNow() };
     const invoices = [created, ...this.getSnapshot().invoices];
     write(INVOICE_KEY, invoices);
     this.set({ invoices });

@@ -9,21 +9,38 @@ import { Card, CardTitle, ListScroll, PageHeader } from "@/components/ui";
 import { PeriodBar, usePeriod } from "@/components/PeriodBar";
 import { staffTurnover } from "@/lib/reports";
 import { reportsFrom, salesBetween } from "@/lib/salesSource";
+import { member, type RosterMember } from "@/lib/roster";
 import { useStore } from "@/lib/store";
-import { demoday, getStaff, meta } from "@/lib/data";
+import { demoday, meta, staff } from "@/lib/data";
 import { longDate, monthLabel, pct, shortDate, zar, zar0 } from "@/lib/format";
 
+/**
+ * Resolves the staff number before anything else renders. Name and designation
+ * come from the records in Admin, history from the migrated file — so someone
+ * taken on in the prototype opens like anyone else. The lookup waits for the
+ * store, or the server's first pass would call them missing.
+ */
 export default function StaffMemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const person = getStaff(Number(id));
+  const { staffRecords, hydrated } = useStore();
 
-  if (!person) notFound();
+  const found = member(staffRecords, staff, Number(id));
+  if (!found) {
+    if (!hydrated) return null;
+    notFound();
+  }
+
+  return <Portfolio member={found} />;
+}
+
+function Portfolio({ member: who }: { member: RosterMember }) {
+  const { invoices } = useStore();
+  const person = who.stats;
 
   const bookings = demoday.bookings.filter((b) => b.stylistId === person.id);
   const dayTotal = bookings.reduce((sum, b) => sum + b.total, 0);
   const period = usePeriod(["day", "week", "month", "range", "twelve"], "day");
   const { from, to, isToday, label, grain } = period.period;
-  const { invoices } = useStore();
 
   /**
    * Their turnover and clients for the chosen window. The twelve-month preset
@@ -78,18 +95,12 @@ export default function StaffMemberPage({ params }: { params: Promise<{ id: stri
       </p>
 
       <PageHeader
-        eyebrow={
-          person.role === "stylist"
-            ? "Stylist portfolio"
-            : person.role === "assistant"
-              ? "Assistant"
-              : "Reception"
-        }
-        title={person.name}
+        eyebrow={who.support ? who.designation : `${who.designation} portfolio`}
+        title={who.name}
         subtitle={
           person.startDate
             ? `With Hairline since ${shortDate(person.startDate)}`
-            : "Team member"
+            : "Newly on the books — nothing billed to them yet"
         }
         actions={<PeriodBar c={period} />}
       />

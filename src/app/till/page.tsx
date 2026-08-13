@@ -13,6 +13,8 @@ import { PaymentPanel } from "@/components/till/PaymentPanel";
 import { GlobalSearch } from "@/components/till/GlobalSearch";
 import { demoday, earningStylists, getClient, getStaff, meta, staff } from "@/lib/data";
 import { initials, longDate, zar, zar0 } from "@/lib/format";
+import { demoNow } from "@/lib/clock";
+import { operators, roster } from "@/lib/roster";
 import { useStore } from "@/lib/store";
 import { elapsedSeconds, emptyTill, tillReduce, totals as computeTotals } from "@/lib/till";
 import type { Client, PaymentMethod, Product, Service, TillLine } from "@/lib/types";
@@ -21,7 +23,7 @@ let lineCounter = 0;
 const nextKey = () => `line-${(lineCounter += 1)}`;
 
 export default function TillPage() {
-  const { invoices, addInvoice, dockets, setDockets, addClient } = useStore();
+  const { invoices, addInvoice, dockets, setDockets, addClient, staffRecords } = useStore();
   const [till, dispatch] = useReducer(tillReduce, undefined, emptyTill);
   const [docketNo, setDocketNo] = useState<number | null>(null);
   const [addingClient, setAddingClient] = useState(false);
@@ -132,7 +134,7 @@ export default function TillPage() {
       docketNo != null ? saveDocket(dockets, docketNo, till) : dockets,
       emptyTill(),
       meta.lastInvoiceNumber,
-      new Date().toISOString(),
+      demoNow(),
       forDate
     );
     setDockets(next);
@@ -162,7 +164,7 @@ export default function TillPage() {
         dockets,
         till,
         meta.lastInvoiceNumber,
-        new Date().toISOString()
+        demoNow()
       );
       next = opened.dockets;
       number = opened.docket.number;
@@ -219,7 +221,7 @@ export default function TillPage() {
     const client = getClient(state.clientId);
     setSlip({
       number,
-      date: new Date().toISOString(),
+      date: demoNow(),
       clientName: state.clientName ?? "Walk-in",
       clientTel: client?.tel,
       lines: state.lines,
@@ -257,6 +259,12 @@ export default function TillPage() {
     const ids = new Set(till.lines.map((l) => l.stylistId).filter((id): id is number => id != null));
     return staff.filter((s) => ids.has(s.id));
   }, [till.lines]);
+
+  /**
+   * Who a line can be credited to: whoever is on the books in Admin today, bar
+   * reception. A stylist taken on this morning can be picked this morning.
+   */
+  const creditable = useMemo(() => operators(roster(staffRecords, staff)), [staffRecords]);
 
   const hasLines = till.lines.length > 0;
   const changeDue = totals.change > 0;
@@ -383,7 +391,9 @@ export default function TillPage() {
             ) : (
               <ul>
                 {till.lines.map((line) => {
-                  const stylist = getStaff(line.stylistId);
+                  /* Records first, so a stylist taken on today has a name here. */
+                  const stylist =
+                    creditable.find((m) => m.id === line.stylistId) ?? getStaff(line.stylistId);
                   return (
                     <li key={line.key} className="group px-5 py-3">
                       <div className="flex items-start gap-3">
@@ -438,13 +448,11 @@ export default function TillPage() {
                               aria-label={`Stylist for ${line.descr}`}
                               className="rounded border border-edge bg-white px-1.5 py-1 text-[11.5px] text-ink"
                             >
-                              {staff
-                                .filter((s) => s.role !== "reception")
-                                .map((s) => (
-                                  <option key={s.id} value={s.id}>
-                                    {s.name}
-                                  </option>
-                                ))}
+                              {creditable.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name}
+                                </option>
+                              ))}
                             </select>
                           </label>
 

@@ -102,7 +102,8 @@ const otherDay = await text();
 check("FR-010 a chosen date changes the figures", !otherDay.includes(todayTake ?? "zzz"),
   (otherDay.match(/Taken R ?[\d ]+/) ?? [""])[0]);
 check("FR-010 offers Back to today", /Back to today/.test(otherDay));
-await clickStartsWith("Date range");
+// The dashboard's grain buttons call it Range; the daybook calls it Date range.
+await clickStartsWith("Range");
 await sleep(900);
 await setInput("From date", "2026-06-01");
 await sleep(500);
@@ -122,7 +123,14 @@ check("FR-007 report type selector", await ev(`!!document.querySelector('select[
 check("FR-007 start and end dates", await ev(`
   !!document.querySelector('[aria-label="Start date"]') && !!document.querySelector('[aria-label="End date"]')
 `));
-check("FR-009 staff multi-select with Select all", /Select all/.test(rep) && /Deselect all/.test(rep));
+/* The staff picker is a dropdown now, so Select all sits inside the panel. */
+await ev(`document.querySelector('button[aria-label="Staff"]')?.click(), true`);
+await sleep(700);
+const picker = await text();
+check("FR-009 staff multi-select with Select all",
+  /Select all/i.test(picker) && /Deselect all/i.test(picker));
+await ev(`document.querySelector('button[aria-label="Staff"]')?.click(), true`);
+await sleep(400);
 check("FR-009 columns show services, retail and salon stock",
   /services/i.test(rep) && /retail/i.test(rep) && /salon stock/i.test(rep));
 check("FR-009 both excl and incl VAT", /excl vat/i.test(rep) && /incl vat/i.test(rep));

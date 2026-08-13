@@ -60,7 +60,10 @@ const checks = [];
 const check = (label, pass, extra = "") =>
   checks.push(`${pass ? "PASS" : "FAIL"}  ${label}${extra ? " — " + extra : ""}`);
 
-// Services list: popular first, no duration.
+// Services list: popular first, no duration. The till opens on Clients today,
+// so the list is a tab away.
+await clickText("services");
+await sleep(1400);
 const firstThree = await evaluate(`
   Array.from(document.querySelectorAll('ul li button')).slice(0,3).map(b => b.textContent.trim())
 `);

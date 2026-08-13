@@ -7,26 +7,26 @@ import { Badge, Card, PageHeader } from "@/components/ui";
 import { PeriodBar, usePeriod } from "@/components/PeriodBar";
 import { staffTurnover } from "@/lib/reports";
 import { salesBetween } from "@/lib/salesSource";
+import { roster } from "@/lib/roster";
 import { demoday, staff } from "@/lib/data";
 import { initials, pct, zar0 } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
-const ROLE_LABEL: Record<string, string> = {
-  stylist: "Stylist",
-  assistant: "Assistant",
-  reception: "Reception",
-};
-
 export default function StaffPage() {
-  const { role } = useStore();
+  const { role, invoices, staffRecords } = useStore();
   const canSeeMoney = role === "owner";
 
-  const stylists = staff.filter((s) => s.role === "stylist").sort((a, b) => b.totalRevenue - a.totalRevenue);
-  const others = staff.filter((s) => s.role !== "stylist");
+  /**
+   * The team comes from the records kept in Admin — so someone taken on today
+   * shows up here, someone turned inactive drops off, and everyone is called
+   * what Admin calls them. Turnover joins on by staff number.
+   */
+  const team = useMemo(() => roster(staffRecords, staff), [staffRecords]);
+  const stylists = team.filter((m) => !m.support);
+  const others = team.filter((m) => m.support);
 
   const period = usePeriod(["twelve", "day", "week", "month", "range"], "twelve");
   const { from, to, isToday, label } = period.period;
-  const { invoices } = useStore();
 
   /**
    * Turnover per staff member for the chosen window, from the same sales the
@@ -37,19 +37,19 @@ export default function StaffPage() {
   const periodRevenue = useMemo(() => {
     if (useAggregate) return null;
     const sales = salesBetween(from, to, invoices);
-    const rows = staffTurnover(sales, staff.map((x) => x.id));
+    const rows = staffTurnover(sales, team.map((m) => m.id));
     return new Map(rows.map((r) => [r.stylistId, r.inclVat.total]));
-  }, [useAggregate, from, to, invoices]);
+  }, [useAggregate, from, to, invoices, team]);
 
   const revenueOf = (id: number, fallback: number) =>
     periodRevenue ? (periodRevenue.get(id) ?? 0) : fallback;
 
   const ranked = [...stylists].sort(
-    (a, b) => revenueOf(b.id, b.totalRevenue) - revenueOf(a.id, a.totalRevenue)
+    (a, b) => revenueOf(b.id, b.stats.totalRevenue) - revenueOf(a.id, a.stats.totalRevenue)
   );
 
-  const teamRevenue = stylists.reduce((sum, s) => sum + revenueOf(s.id, s.totalRevenue), 0);
-  const teamTips = staff.reduce((sum, s) => sum + s.tips.total, 0);
+  const teamRevenue = stylists.reduce((sum, m) => sum + revenueOf(m.id, m.stats.totalRevenue), 0);
+  const teamTips = team.reduce((sum, m) => sum + m.stats.tips.total, 0);
 
   /**
    * Invoices over the window. Line-by-line history reaches back six months, so a
@@ -57,7 +57,7 @@ export default function StaffPage() {
    * reported as a full one.
    */
   const salesCount = useAggregate
-    ? staff.reduce((sum, s) => sum + s.invoices, 0)
+    ? team.reduce((sum, m) => sum + m.stats.invoices, 0)
     : salesBetween(from, to, invoices).length;
 
   return (
@@ -65,7 +65,7 @@ export default function StaffPage() {
       <PageHeader
         eyebrow="Team"
         title="Staff"
-        subtitle={`${staff.length} people on the books — ${stylists.length} stylists, ${others.length} support.`}
+        subtitle={`${team.length} active on the books — ${stylists.length} stylists, ${others.length} support.`}
         actions={canSeeMoney ? <PeriodBar c={period} /> : undefined}
       />
 
@@ -87,7 +87,7 @@ export default function StaffPage() {
             value={ranked[0]?.name ?? "—"}
             hint={
               ranked[0]
-                ? `${zar0(revenueOf(ranked[0].id, ranked[0].totalRevenue))} · ${label.toLowerCase()}`
+                ? `${zar0(revenueOf(ranked[0].id, ranked[0].stats.totalRevenue))} · ${label.toLowerCase()}`
                 : undefined
             }
           />
@@ -96,39 +96,42 @@ export default function StaffPage() {
 
       <h2 className="mb-2 text-sm font-semibold text-ink">Stylists</h2>
       <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {ranked.map((s) => {
-          const todays = demoday.bookings.filter((b) => b.stylistId === s.id).length;
+        {ranked.map((m) => {
+          const todays = demoday.bookings.filter((b) => b.stylistId === m.id).length;
+          const revenue = revenueOf(m.id, m.stats.totalRevenue);
           return (
-            <Link key={s.id} href={`/staff/${s.id}`} className="block">
+            <Link key={m.id} href={`/staff/${m.id}`} className="block">
               <Card className="h-full p-4 transition-colors hover:border-taupe">
                 <div className="flex items-start gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-chip text-sm font-semibold text-taupe-deep">
-                    {initials(s.name)}
+                    {initials(m.name)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-ink">{s.name}</p>
+                    <p className="truncate font-semibold text-ink">{m.name}</p>
                     <p className="text-xs text-mutedink">
-                      {ROLE_LABEL[s.role]}
+                      {m.designation}
                       {todays > 0 && ` · ${todays} booked today`}
                     </p>
                   </div>
                 </div>
                 {canSeeMoney && (
-                  <>
-                    <div className="mt-3 flex items-end justify-between gap-2">
-                      <div>
-                        <p className="tnum text-lg font-semibold text-ink">
-                          {zar0(revenueOf(s.id, s.totalRevenue))}
-                        </p>
-                        <p className="text-[11px] text-mutedink">
-                          {useAggregate
-                            ? `12 months · ${pct(s.retailShare, 1)} retail`
+                  <div className="mt-3 flex items-end justify-between gap-2">
+                    <div>
+                      <p className="tnum text-lg font-semibold text-ink">{zar0(revenue)}</p>
+                      <p className="text-[11px] text-mutedink">
+                        {m.stats.invoices === 0 && m.stats.monthly.length === 0
+                          ? "Newly on the books"
+                          : useAggregate
+                            ? `12 months · ${pct(m.stats.retailShare, 1)} retail`
                             : label}
-                        </p>
-                      </div>
-                      <Sparkline values={s.monthly.map((m) => m.revenue)} width={100} height={28} />
+                      </p>
                     </div>
-                  </>
+                    <Sparkline
+                      values={m.stats.monthly.map((x) => x.revenue)}
+                      width={100}
+                      height={28}
+                    />
+                  </div>
                 )}
               </Card>
             </Link>
@@ -143,19 +146,19 @@ export default function StaffPage() {
         contribution is visible.
       </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {others.map((s) => (
-          <Link key={s.id} href={`/staff/${s.id}`} className="block">
+        {others.map((m) => (
+          <Link key={m.id} href={`/staff/${m.id}`} className="block">
             <Card className="h-full p-4 transition-colors hover:border-taupe">
               <div className="flex items-start gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-hairline-soft text-sm font-semibold text-mutedink">
-                  {initials(s.name)}
+                  {initials(m.name)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-ink">{s.name}</p>
-                  <p className="text-xs text-mutedink">{ROLE_LABEL[s.role]}</p>
+                  <p className="truncate font-semibold text-ink">{m.name}</p>
+                  <p className="text-xs text-mutedink">{m.designation}</p>
                 </div>
-                {s.tips.total > 0 && canSeeMoney && (
-                  <Badge tone="neutral">{zar0(s.tips.total)} tips</Badge>
+                {m.stats.tips.total > 0 && canSeeMoney && (
+                  <Badge tone="neutral">{zar0(m.stats.tips.total)} tips</Badge>
                 )}
               </div>
             </Card>

@@ -124,7 +124,7 @@ await sleep(1200);
 await clickExact("+ New docket");
 await sleep(1600);
 check("open dockets listed in the tab", await ev(`!!document.querySelector('[data-open-dockets] li')`));
-check("open section is labelled", await ev(`/still open/i.test(document.body.innerText)`));
+check("open section is labelled", await ev(`/awaiting payment/i.test(document.body.innerText)`));
 const badge = await ev(`
   Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Clients today'))?.textContent.trim()
 `);

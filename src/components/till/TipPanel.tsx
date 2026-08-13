@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { staff } from "@/lib/data";
 import { zar } from "@/lib/format";
+import { operators, roster } from "@/lib/roster";
+import { useStore } from "@/lib/store";
 import type { Tip } from "@/lib/types";
 
 interface TipPanelProps {
@@ -21,9 +23,12 @@ export function TipPanel({ tips, suggestedIds, onTip }: TipPanelProps) {
   const [who, setWho] = useState<number | "">(suggestedIds[0] ?? "");
   const [amount, setAmount] = useState("");
 
-  const operators = [
-    ...staff.filter((s) => suggestedIds.includes(s.id)),
-    ...staff.filter((s) => !suggestedIds.includes(s.id) && s.role !== "reception"),
+  /* Everyone on the books today bar reception, with the sale's stylists first. */
+  const { staffRecords } = useStore();
+  const tippable = operators(roster(staffRecords, staff));
+  const choices = [
+    ...tippable.filter((m) => suggestedIds.includes(m.id)),
+    ...tippable.filter((m) => !suggestedIds.includes(m.id)),
   ];
 
   function add() {
@@ -34,7 +39,9 @@ export function TipPanel({ tips, suggestedIds, onTip }: TipPanelProps) {
     setAdding(false);
   }
 
-  const nameOf = (id: number) => staff.find((s) => s.id === id)?.name ?? "Unknown";
+  /* Records first, so a rename in Admin shows on a tip already taken. */
+  const nameOf = (id: number) =>
+    staffRecords.find((r) => r.id === id)?.name ?? staff.find((s) => s.id === id)?.name ?? "Unknown";
 
   return (
     <div className="shrink-0 border-t border-edge-faint px-5 py-3">
@@ -84,10 +91,10 @@ export function TipPanel({ tips, suggestedIds, onTip }: TipPanelProps) {
             className="min-w-0 flex-1 rounded-lg bg-canvas px-2 py-1.5 text-[12.5px] text-ink"
           >
             <option value="">Choose operator…</option>
-            {operators.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.role === "assistant" ? " (assistant)" : ""}
+            {choices.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+                {m.support ? ` (${m.designation.toLowerCase()})` : ""}
               </option>
             ))}
           </select>

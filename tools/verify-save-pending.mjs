@@ -78,7 +78,11 @@ await ev(`(() => {
 await until(`!document.querySelector('input[autocomplete="username"]')`);
 await sleep(2400);
 
-// Build a sale with no docket open, straight off the service list.
+// Build a sale with no docket open, straight off the service list. The till
+// opens on Clients today, so the list is a tab away.
+await clickTab("services");
+await until(`!!document.querySelector('[data-catalogue] li button')`);
+await sleep(800);
 await ev(`document.querySelectorAll('[data-catalogue] li button')[0]?.click(), true`);
 await sleep(1400);
 check("Save button offered next to the primary", await ev(`

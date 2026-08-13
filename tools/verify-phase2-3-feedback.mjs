@@ -151,15 +151,30 @@ check("FR-017 designations are configurable",
   /designations/i.test(st) && (await ev(`!!document.querySelector('[aria-label="New designation"]')`)));
 await shot("p2-staff-admin");
 
-await setVal("Name for staff 1", "Karin McGorian");
+/*
+ * Names and contact details are edited through the staff dialog now — blur-to-save
+ * fields gave no sign they had taken — so drive that.
+ */
+await ev(`document.querySelector('[aria-label="Edit Karin M."]')?.click(), true`);
+await sleep(900);
+await setVal("Staff name", "Karin McGorian");
+await setVal("Staff email", "karin@example.co.za");
+await sleep(400);
+await click("Save changes");
 await sleep(1300);
-check("FR-016 name can be edited", /Karin McGorian/.test(await text()));
-await setVal("Email for Karin McGorian", "karin@example.co.za");
-await sleep(1300);
-check("FR-018 email saved", /email saved/i.test(await text()));
-await setVal("Email for Karin McGorian", "not-an-email");
-await sleep(1300);
+const edited = await text();
+check("FR-016 name can be edited", /Karin McGorian/.test(edited));
+check("FR-018 email saved", /karin@example\.co\.za/.test(edited));
+
+await ev(`document.querySelector('[aria-label="Edit Karin McGorian"]')?.click(), true`);
+await sleep(900);
+await setVal("Staff email", "not-an-email");
+await sleep(400);
+await click("Save changes");
+await sleep(1100);
 check("FR-018 bad email refused", /does not look like an email/i.test(await text()));
+await click("Cancel");
+await sleep(600);
 
 await setVal("New designation", "Colour technician");
 await sleep(500);

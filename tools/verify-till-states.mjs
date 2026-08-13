@@ -102,12 +102,20 @@ check("2 client header populated", !text.includes("Walk-in — pick a client"));
 check("2 lines still empty", text.includes("Pick a service or product to start"));
 await shot("s2-client");
 
-// STATE 3: lines, nothing paid
+// STATE 3: lines, nothing paid. The till opens on Clients today, so the item
+// tiles are a tab away.
 await evaluate(`(() => {
-  const tiles = Array.from(document.querySelectorAll('button')).filter(b => /R\\s?\\d/.test(b.textContent||'') && b.className.includes('min-h-[72px]'));
-  if (tiles[0]) tiles[0].click();
-  if (tiles[3]) tiles[3].click();
-  return tiles.length;
+  const t = Array.from(document.querySelectorAll('button[aria-pressed]'))
+    .find(b => b.textContent.trim().toLowerCase().startsWith('services'));
+  if (t) { t.click(); return true; } return false;
+})()`);
+await sleep(1200);
+// The catalogue is a popularity-ordered list now, not a tile grid.
+await evaluate(`(() => {
+  const items = Array.from(document.querySelectorAll('[data-catalogue] li button'));
+  if (items[0]) items[0].click();
+  if (items[3]) items[3].click();
+  return items.length;
 })()`);
 await sleep(1200);
 text = await evaluate(`document.body.innerText.replace(/\\s+/g,' ')`);
@@ -140,9 +148,9 @@ await shot("s5-fully-paid");
 await clickText("Clear");
 await sleep(800);
 await evaluate(`(() => {
-  const tiles = Array.from(document.querySelectorAll('button')).filter(b => b.className.includes('min-h-[72px]'));
-  if (tiles[0]) tiles[0].click();
-  return tiles.length;
+  const items = Array.from(document.querySelectorAll('[data-catalogue] li button'));
+  if (items[0]) items[0].click();
+  return items.length;
 })()`);
 await sleep(900);
 await clickText("Cash");
@@ -172,8 +180,12 @@ await setVal('input[type="search"]', "");
 await sleep(500);
 
 // Other screens still render with the rail
-for (const [path, needle] of [["/", "Dashboard"], ["/clients", "Clients"], ["/diary", "Diary"],
-                              ["/stock", "Stock"], ["/cashup", "Cash-up"], ["/pricing", "Pricing"],
+// Signed in as reception, so "/" lands on the till rather than the dashboard,
+// and Pricing goes by Price menu now.
+for (const [path, needle] of [["/", "Pick a service or product to start"],
+                              ["/clients", "Clients"], ["/diary", "Diary"],
+                              ["/stock", "Stock"], ["/cashup", "Cash-up"],
+                              ["/pricing", "Price menu"],
                               ["/admin", "Settings and data"]]) {
   await send("Page.navigate", { url: BASE + path });
   await sleep(1800);

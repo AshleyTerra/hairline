@@ -66,17 +66,37 @@ await ev(`(() => {
 await sleep(2600);
 
 // --- Dockets -------------------------------------------------------------
-check("empty state explains dockets", await ev(`document.body.innerText.includes('No dockets open')`));
+/** The till opens on Clients today, which is where dockets are started. */
+const openServices = () => ev(`(() => {
+  const t = Array.from(document.querySelectorAll('button[aria-pressed]'))
+    .find(b => b.textContent.trim().toLowerCase().startsWith('services'));
+  if (t) { t.click(); return true; } return false;
+})()`);
+const openClientsTab = () => ev(`(() => {
+  const t = Array.from(document.querySelectorAll('button[aria-pressed]'))
+    .find(b => b.textContent.trim().toLowerCase().startsWith('clients today'));
+  if (t) { t.click(); return true; } return false;
+})()`);
+
+check("the day's tab offers a new docket", await ev(`
+  Array.from(document.querySelectorAll('button')).some(b => b.textContent.trim() === '+ New docket')
+`));
 
 await click("+ New docket");
-await sleep(1200);
+await sleep(1400);
 const firstNo = await ev(`document.body.innerText.match(/#(\\d+)/)?.[1]`);
 check("first docket carries on from the salon's numbering", Number(firstNo) === 93711, `#${firstNo}`);
+await openServices();
+await sleep(1200);
 await firstTile();
 await sleep(1000);
 
+await openClientsTab();
+await sleep(900);
 await click("+ New docket");
-await sleep(1200);
+await sleep(1400);
+await openServices();
+await sleep(1000);
 const numbers = await ev(`Array.from(document.body.innerText.matchAll(/#(\\d+)/g)).map(m=>m[1])`);
 check("two dockets open with different numbers", new Set(numbers).size >= 2, numbers?.join(", "));
 await ev(`document.querySelectorAll('[data-catalogue] li button')[1]?.click(), true`);

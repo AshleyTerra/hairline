@@ -30,42 +30,36 @@ export function DocketBar({ dockets, activeNumber, onOpen, onNew }: DocketBarPro
         </button>
       </div>
 
-      {dockets.length === 0 ? (
-        <p className="rounded-[10px] border border-dashed border-edge bg-white/60 px-3 py-2 text-[12px] text-faintink">
-          No dockets open. Start one per client as they arrive, or just ring up a sale directly.
-        </p>
-      ) : (
-        <ul data-dockets className="flex flex-wrap gap-1.5">
-          {dockets.map((d) => {
-            const active = d.number === activeNumber;
-            const total = docketTotal(d);
-            return (
-              <li key={d.number}>
-                <button
-                  type="button"
-                  onClick={() => onOpen(d.number)}
-                  aria-pressed={active}
-                  className={`flex items-center gap-2 rounded-[10px] border px-3 py-1.5 text-left transition-colors ${
-                    active
-                      ? "border-ink bg-ink text-white"
-                      : "border-edge-soft bg-white text-ink hover:border-taupe"
-                  }`}
-                >
-                  <span className="text-[12.5px] font-semibold">
-                    {d.state.clientName ?? "Walk-in"}
-                  </span>
-                  <span
-                    className={`tnum text-[11px] ${active ? "text-white/70" : "text-faintink"}`}
-                  >
-                    #{d.number}
-                    {total > 0 ? ` · ${zar0(total)}` : ""}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {/* The till only mounts this bar once something is open, so there is no
+          empty state to draw: Clients today is where a docket is started. */}
+      <ul data-dockets className="flex flex-wrap gap-1.5">
+        {dockets.map((d) => {
+          const active = d.number === activeNumber;
+          const total = docketTotal(d);
+          return (
+            <li key={d.number}>
+              <button
+                type="button"
+                onClick={() => onOpen(d.number)}
+                aria-pressed={active}
+                className={`flex items-center gap-2 rounded-[10px] border px-3 py-1.5 text-left transition-colors ${
+                  active
+                    ? "border-ink bg-ink text-white"
+                    : "border-edge-soft bg-white text-ink hover:border-taupe"
+                }`}
+              >
+                <span className="text-[12.5px] font-semibold">
+                  {d.state.clientName ?? "Walk-in"}
+                </span>
+                <span className={`tnum text-[11px] ${active ? "text-white/70" : "text-faintink"}`}>
+                  #{d.number}
+                  {total > 0 ? ` · ${zar0(total)}` : ""}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
