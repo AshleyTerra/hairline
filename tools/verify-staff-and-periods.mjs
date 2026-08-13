@@ -265,6 +265,52 @@ check("each row carries the client, the work and the invoice number",
   /#9\d{4}/.test(pMonth), (pMonth.match(/#9\d{4}/) ?? [""])[0]);
 await shot("s10b-portfolio-month-list");
 
+// Layout: the cards under the chart sit with it, and a long list scrolls inside
+// its own card rather than dragging the page down.
+const layout = await ev(`(() => {
+  const cardTitle = (t) => Array.from(document.querySelectorAll('div'))
+    .find(d => d.firstElementChild && d.firstElementChild.textContent.trim().startsWith(t)
+      && d.className.includes('rounded'));
+  const chart = cardTitle('Monthly turnover');
+  const advances = cardTitle('Staff advances');
+  const list = document.querySelector('.list-scroll');
+  if (!chart || !advances) return { error: 'cards not found' };
+  const c = chart.getBoundingClientRect(), a = advances.getBoundingClientRect();
+  return {
+    gap: Math.round(a.top - c.bottom),
+    sameColumn: Math.abs(a.left - c.left) < 2,
+    listScrolls: !!list && list.scrollHeight > list.clientHeight + 4,
+    listHeight: list ? Math.round(list.clientHeight) : -1,
+    pageHeight: Math.round(document.documentElement.scrollHeight),
+    viewport: window.innerHeight,
+  };
+})()`);
+check("staff advances sits straight under the month overview",
+  layout?.sameColumn === true && layout?.gap >= 0 && layout?.gap <= 24,
+  JSON.stringify(layout));
+check("the clients list scrolls inside its card", layout?.listScrolls === true,
+  `list ${layout?.listHeight}px tall`);
+check("the page no longer runs on past the fold",
+  layout?.pageHeight <= layout?.viewport * 1.5,
+  `page ${layout?.pageHeight}px, viewport ${layout?.viewport}px`);
+await shot("s10c-portfolio-layout");
+
+// Support staff have no turnover, so their column must not hold the page open
+// for nothing: every column that takes up space has to carry a card.
+await send("Page.navigate", { url: BASE + "/staff/11" });
+await until(`!!document.querySelector('button[aria-pressed]')`);
+await sleep(1500);
+check("a support member's page has no column standing empty", await ev(`(() => {
+  const grid = document.querySelector('main .grid.items-start');
+  if (!grid) return 'no grid';
+  const visible = Array.from(grid.children).filter(k => k.getClientRects().length > 0);
+  if (visible.length === 0) return 'nothing shown';
+  return visible.every(col => col.querySelector('.rounded-lg, .rounded') !== null);
+})()`));
+check("their tiles do not claim turnover they were never billed",
+  /Nothing billed to them in this window/i.test(await text()));
+await shot("s10d-support-layout");
+
 // The same trap on the team screen: a twelve-month sales count read off the
 // six-month index would understate the year by half.
 await send("Page.navigate", { url: BASE + "/staff" });

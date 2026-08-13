@@ -5,7 +5,7 @@ import { use } from "react";
 import { notFound } from "next/navigation";
 import { useMemo } from "react";
 import { ColumnChart, Meter, StatTile } from "@/components/charts";
-import { Card, CardTitle, PageHeader } from "@/components/ui";
+import { Card, CardTitle, ListScroll, PageHeader } from "@/components/ui";
 import { PeriodBar, usePeriod } from "@/components/PeriodBar";
 import { staffTurnover } from "@/lib/reports";
 import { reportsFrom, salesBetween } from "@/lib/salesSource";
@@ -143,164 +143,177 @@ export default function StaffMemberPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
-        {person.totalRevenue > 0 && (
-          <Card>
-            <CardTitle right={<span className="text-xs text-mutedink">Last 12 months</span>}>
-              Monthly turnover
-            </CardTitle>
-            <div className="px-4 pb-3 pt-4">
-              <ColumnChart
-                data={person.monthly.map((m) => ({
-                  label: monthLabel(m.ym).slice(0, 3),
-                  value: m.revenue,
-                }))}
-                height={160}
-              />
-              <div className="mt-4">
-                <div className="mb-1 flex items-baseline justify-between text-xs">
-                  <span className="text-mutedink">
-                    {thisMonth ? monthLabel(thisMonth.ym) : "This month"} against target
-                  </span>
-                  <span className="tnum text-ink">
-                    {zar0(monthRevenue)} / {zar0(person.monthlyTarget)}
-                  </span>
-                </div>
-                <Meter
-                  value={monthRevenue}
-                  target={person.monthlyTarget}
-                  tone={monthRevenue >= person.monthlyTarget ? "good" : "primary"}
+        {/*
+          Turnover first, then what they have drawn against it. Support staff have
+          neither, so the column is left out rather than holding half the page
+          open for nothing.
+        */}
+        <div className="flex flex-col gap-4 empty:hidden">
+          {person.totalRevenue > 0 && (
+            <Card>
+              <CardTitle right={<span className="text-xs text-mutedink">Last 12 months</span>}>
+                Monthly turnover
+              </CardTitle>
+              <div className="px-4 pb-3 pt-4">
+                <ColumnChart
+                  data={person.monthly.map((m) => ({
+                    label: monthLabel(m.ym).slice(0, 3),
+                    value: m.revenue,
+                  }))}
+                  height={160}
                 />
+                <div className="mt-4">
+                  <div className="mb-1 flex items-baseline justify-between text-xs">
+                    <span className="text-mutedink">
+                      {thisMonth ? monthLabel(thisMonth.ym) : "This month"} against target
+                    </span>
+                    <span className="tnum text-ink">
+                      {zar0(monthRevenue)} / {zar0(person.monthlyTarget)}
+                    </span>
+                  </div>
+                  <Meter
+                    value={monthRevenue}
+                    target={person.monthlyTarget}
+                    tone={monthRevenue >= person.monthlyTarget ? "good" : "primary"}
+                  />
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-mutedink">Services</dt>
+                    <dd className="tnum font-semibold text-ink">{zar0(person.serviceRevenue)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-mutedink">Retail ({pct(person.retailShare, 1)})</dt>
+                    <dd className="tnum font-semibold text-ink">{zar0(person.retailRevenue)}</dd>
+                  </div>
+                </dl>
               </div>
-              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <dt className="text-xs text-mutedink">Services</dt>
-                  <dd className="tnum font-semibold text-ink">{zar0(person.serviceRevenue)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-mutedink">Retail ({pct(person.retailShare, 1)})</dt>
-                  <dd className="tnum font-semibold text-ink">{zar0(person.retailRevenue)}</dd>
-                </div>
-              </dl>
-            </div>
-          </Card>
-        )}
+            </Card>
+          )}
 
-        {/* The diary for the demo day, or whoever they saw in the chosen window. */}
-        <Card>
-          <CardTitle
-            right={
-              <span className="text-xs text-mutedink">
-                {isToday ? longDate(meta.demoDate) : label}
-              </span>
-            }
-          >
-            {isToday ? "Today's clients" : "Clients in this period"}
-          </CardTitle>
+          {person.subs.total > 0 && (
+            <Card>
+              <CardTitle>Staff advances</CardTitle>
+              <div className="px-4 py-4 text-sm">
+                <p className="tnum text-lg font-semibold text-ink">{zar0(person.subs.total)}</p>
+                <p className="text-xs text-mutedink">
+                  Across {person.subs.times} advance{person.subs.times === 1 ? "" : "s"} on record.
+                </p>
+              </div>
+            </Card>
+          )}
+        </div>
 
-          {isToday ? (
-            bookings.length === 0 ? (
+        <div className="flex flex-col gap-4">
+          {/* The diary for the demo day, or whoever they saw in the chosen window. */}
+          <Card>
+            <CardTitle
+              right={
+                <span className="text-xs text-mutedink">
+                  {isToday ? longDate(meta.demoDate) : label}
+                </span>
+              }
+            >
+              {isToday ? "Today's clients" : "Clients in this period"}
+            </CardTitle>
+
+            {isToday ? (
+              bookings.length === 0 ? (
+                <p className="px-4 py-10 text-center text-sm text-mutedink">
+                  Nothing booked on the demo day.
+                </p>
+              ) : (
+                <ListScroll>
+                  <ul className="divide-y divide-hairline-soft">
+                    {bookings.map((b) => (
+                      <li
+                        key={b.invoiceId}
+                        className="flex items-center justify-between gap-3 px-4 py-2.5"
+                      >
+                        <span className="min-w-0">
+                          <Link
+                            href={`/clients/${b.clientId}`}
+                            className="block truncate text-sm text-ink underline-offset-2 hover:underline"
+                          >
+                            {b.clientName}
+                          </Link>
+                          <span className="block truncate text-xs text-mutedink">{b.service}</span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="tnum block text-sm font-semibold text-ink">
+                            {zar(b.total)}
+                          </span>
+                          <span className="tnum block text-xs text-mutedink">
+                            {b.start}–{b.end}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </ListScroll>
+              )
+            ) : useAggregate ? (
               <p className="px-4 py-10 text-center text-sm text-mutedink">
-                Nothing booked on the demo day.
+                {person.invoices > 0
+                  ? `${person.invoices.toLocaleString("en-ZA")} invoices over the twelve months. Client by client, the history runs from ${shortDate(reportsFrom)} — pick Day, Week, Month or Range to list them.`
+                  : "Their work is billed under a senior stylist, so no invoices carry their name."}
+              </p>
+            ) : windowVisits.length === 0 ? (
+              <p className="px-4 py-10 text-center text-sm text-mutedink">
+                Nothing billed to them in this window.
+                {from < reportsFrom && ` Client-by-client history starts ${shortDate(reportsFrom)}.`}
               </p>
             ) : (
-              <ul className="divide-y divide-hairline-soft">
-                {bookings.map((b) => (
-                  <li
-                    key={b.invoiceId}
-                    className="flex items-center justify-between gap-3 px-4 py-2.5"
-                  >
-                    <span className="min-w-0">
-                      <Link
-                        href={`/clients/${b.clientId}`}
-                        className="block truncate text-sm text-ink underline-offset-2 hover:underline"
+              <>
+                <ListScroll>
+                  <ul className="divide-y divide-hairline-soft">
+                    {windowVisits.slice(0, LIST_CAP).map((v) => (
+                      <li
+                        key={v.number}
+                        className="flex items-center justify-between gap-3 px-4 py-2.5"
                       >
-                        {b.clientName}
-                      </Link>
-                      <span className="block truncate text-xs text-mutedink">{b.service}</span>
-                    </span>
-                    <span className="shrink-0 text-right">
-                      <span className="tnum block text-sm font-semibold text-ink">
-                        {zar(b.total)}
-                      </span>
-                      <span className="tnum block text-xs text-mutedink">
-                        {b.start}–{b.end}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )
-          ) : useAggregate ? (
-            <p className="px-4 py-10 text-center text-sm text-mutedink">
-              {person.invoices > 0
-                ? `${person.invoices.toLocaleString("en-ZA")} invoices over the twelve months. Client by client, the history runs from ${shortDate(reportsFrom)} — pick Day, Week, Month or Range to list them.`
-                : "Their work is billed under a senior stylist, so no invoices carry their name."}
-            </p>
-          ) : windowVisits.length === 0 ? (
-            <p className="px-4 py-10 text-center text-sm text-mutedink">
-              Nothing billed to them in this window.
-              {from < reportsFrom && ` Client-by-client history starts ${shortDate(reportsFrom)}.`}
-            </p>
-          ) : (
-            <>
-              <ul className="divide-y divide-hairline-soft">
-                {windowVisits.slice(0, LIST_CAP).map((v) => (
-                  <li
-                    key={v.number}
-                    className="flex items-center justify-between gap-3 px-4 py-2.5"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm text-ink">{v.client}</span>
-                      <span className="block truncate text-xs text-mutedink">{v.what}</span>
-                    </span>
-                    <span className="shrink-0 text-right">
-                      <span className="tnum block text-sm font-semibold text-ink">
-                        {zar(v.value)}
-                      </span>
-                      <span className="tnum block text-xs text-mutedink">
-                        {shortDate(v.date)} · #{v.number}
-                      </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm text-ink">{v.client}</span>
+                          <span className="block truncate text-xs text-mutedink">{v.what}</span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="tnum block text-sm font-semibold text-ink">
+                            {zar(v.value)}
+                          </span>
+                          <span className="tnum block text-xs text-mutedink">
+                            {shortDate(v.date)} · #{v.number}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </ListScroll>
+                {windowVisits.length > LIST_CAP && (
+                  <p className="border-t border-hairline-soft px-4 py-2.5 text-xs text-mutedink">
+                    Showing the {LIST_CAP} most recent of {windowVisits.length} visits. Reports export
+                    the lot.
+                  </p>
+                )}
+              </>
+            )}
+          </Card>
+
+          {person.clock.length > 0 && (
+            <Card>
+              <CardTitle>Time clock, demo week</CardTitle>
+              <ul className="divide-y divide-hairline-soft text-sm">
+                {person.clock.map((c) => (
+                  <li key={c.day} className="flex items-center justify-between px-4 py-2">
+                    <span className="text-body">{shortDate(c.day)}</span>
+                    <span className="tnum text-mutedink">
+                      {c.in ?? "—"} → {c.out ?? "still in"}
                     </span>
                   </li>
                 ))}
               </ul>
-              {windowVisits.length > LIST_CAP && (
-                <p className="border-t border-hairline-soft px-4 py-2.5 text-xs text-mutedink">
-                  Showing the {LIST_CAP} most recent of {windowVisits.length} visits. Reports export
-                  the lot.
-                </p>
-              )}
-            </>
+            </Card>
           )}
-        </Card>
-
-        {person.clock.length > 0 && (
-          <Card>
-            <CardTitle>Time clock, demo week</CardTitle>
-            <ul className="divide-y divide-hairline-soft text-sm">
-              {person.clock.map((c) => (
-                <li key={c.day} className="flex items-center justify-between px-4 py-2">
-                  <span className="text-body">{shortDate(c.day)}</span>
-                  <span className="tnum text-mutedink">
-                    {c.in ?? "—"} → {c.out ?? "still in"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )}
-
-        {person.subs.total > 0 && (
-          <Card>
-            <CardTitle>Staff advances</CardTitle>
-            <div className="px-4 py-4 text-sm">
-              <p className="tnum text-lg font-semibold text-ink">{zar0(person.subs.total)}</p>
-              <p className="text-xs text-mutedink">
-                Across {person.subs.times} advance{person.subs.times === 1 ? "" : "s"} on record.
-              </p>
-            </div>
-          </Card>
-        )}
+        </div>
       </div>
     </>
   );

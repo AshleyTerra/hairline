@@ -130,6 +130,11 @@ body {
     background: #fff !important;
   }
 
+  /* A capped, scrolling list prints in full. */
+  .list-scroll {
+    max-height: none !important;
+  }
+
   /* Scroll containers clip on paper; let them run to their natural size. */
   .overflow-x-auto,
   .overflow-y-auto,

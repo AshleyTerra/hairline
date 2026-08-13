@@ -87,3 +87,20 @@ export function Empty({ children }: { children: ReactNode }) {
 export function TableScroll({ children }: { children: ReactNode }) {
   return <div className="overflow-x-auto">{children}</div>;
 }
+
+/**
+ * Caps a long list so it scrolls inside its own card, instead of dragging the
+ * page down past everything beside it. The print stylesheet lifts the cap, so
+ * paper still gets every row.
+ */
+export function ListScroll({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`list-scroll max-h-[28rem] overflow-y-auto ${className}`}>{children}</div>
+  );
+}
