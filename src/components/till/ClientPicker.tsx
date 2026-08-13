@@ -32,7 +32,7 @@ export function ClientPicker({
 
   if (!clientName) {
     return (
-      <div className="flex h-[70px] shrink-0 items-center gap-2 border-b border-edge-faint px-5">
+      <div className="flex h-[58px] shrink-0 items-center gap-2 border-b border-edge-faint px-5">
         <button
           type="button"
           onClick={onChange}
@@ -65,7 +65,7 @@ export function ClientPicker({
   const stylist = getStaff(client?.prefStylistId);
 
   return (
-    <div className="shrink-0 border-b border-edge-faint px-5 py-4">
+    <div className="shrink-0 border-b border-edge-faint px-5 py-3">
       <div className="flex items-center gap-[11px]">
         <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-taupe text-[13px] font-semibold text-white">
           {initials(clientName)}

@@ -57,7 +57,7 @@ export function PaymentPanel({
   const methodLabel = METHODS.find((m) => m.value === method)?.label ?? method;
 
   return (
-    <div className="px-5 pb-5 pt-4">
+    <div className="shrink-0 px-5 pb-3.5 pt-3">
       {/* What has been taken so far, when a sale is being split */}
       {taken.length > 0 && owing && (
         <p className="mb-3 rounded-[10px] bg-canvas px-3.5 py-2 text-[11.5px] text-taupe-deep">
@@ -74,14 +74,14 @@ export function PaymentPanel({
       )}
 
       {/* Method */}
-      <div className="mb-3 grid grid-cols-5 gap-[5px]">
+      <div className="mb-2 grid grid-cols-5 gap-[5px]">
         {METHODS.map((m) => (
           <button
             key={m.value}
             type="button"
             onClick={() => (m.value === "voucher" ? onRedeemVoucher() : onMethod(m.value))}
             aria-pressed={method === m.value}
-            className={`rounded-[10px] py-2.5 text-center text-[11.5px] font-semibold transition-colors ${
+            className={`rounded-[10px] py-2 text-center text-[11.5px] font-semibold transition-colors ${
               method === m.value
                 ? "bg-taupe text-white"
                 : "bg-canvas text-taupe-deep hover:bg-chip"
@@ -93,17 +93,17 @@ export function PaymentPanel({
       </div>
 
       {/* What is being tendered */}
-      <div className="mb-3 flex items-center justify-between gap-3 rounded-[10px] bg-canvas px-3.5 py-2.5">
+      <div className="mb-2 flex items-center justify-between gap-3 rounded-[10px] bg-canvas px-3.5 py-2">
         <span className="text-[11px] uppercase tracking-[0.1em] text-faintink">Tender</span>
         <span
-          className={`tnum text-[17px] font-semibold ${amount ? "text-ink" : "text-faintink"}`}
+          className={`tnum text-[15px] font-semibold ${amount ? "text-ink" : "text-faintink"}`}
         >
           {amount ? `R ${amount}` : "—"}
         </span>
       </div>
 
       {/* Quick tenders */}
-      <div className="mb-3 flex flex-wrap gap-[5px]">
+      <div className="mb-2 flex flex-wrap gap-[5px]">
         {owing && (
           <button
             type="button"
@@ -129,14 +129,14 @@ export function PaymentPanel({
       </div>
 
       {/* Keypad */}
-      <div className="mb-3 grid grid-cols-3 gap-[7px]">
+      <div className="mb-2 grid grid-cols-3 gap-[6px]">
         {KEYS.map((key) => (
           <button
             key={key}
             type="button"
             onClick={() => onKey(key)}
             aria-label={key === "⌫" ? "Delete last digit" : key}
-            className="tnum rounded-[10px] bg-canvas py-[13px] text-center text-[17px] font-semibold text-ink transition-colors hover:bg-chip active:bg-hairline"
+            className="tnum rounded-[10px] bg-canvas py-[8px] text-center text-[16px] font-semibold text-ink transition-colors hover:bg-chip active:bg-hairline"
           >
             {key}
           </button>
@@ -148,8 +148,8 @@ export function PaymentPanel({
           <button
             type="button"
             onClick={onSave}
-            title="Put this on the client's docket to settle later"
-            className="shrink-0 rounded-[11px] border border-edge bg-white px-5 py-[17px] text-[15px] font-semibold text-taupe-deep transition-colors hover:border-taupe hover:bg-chip"
+            title="Keeps it under Clients today, awaiting payment"
+            className="shrink-0 rounded-[11px] border border-edge bg-white px-5 py-[13px] text-[15px] font-semibold text-taupe-deep transition-colors hover:border-taupe hover:bg-chip"
           >
             Save
           </button>
@@ -159,7 +159,7 @@ export function PaymentPanel({
           type="button"
           onClick={owing ? onTender : onComplete}
           disabled={owing && !amount}
-          className={`flex-1 rounded-[11px] py-[17px] text-center text-[15px] font-semibold transition-colors ${
+          className={`flex-1 rounded-[11px] py-[13px] text-center text-[15px] font-semibold transition-colors ${
             owing && !amount
               ? "cursor-not-allowed bg-hairline text-mutedink"
               : "bg-ink text-white hover:bg-black"
@@ -175,11 +175,6 @@ export function PaymentPanel({
         </button>
       </div>
 
-      {onSave && (
-        <p className="mt-2 text-center text-[11px] text-faintink">
-          Save keeps it under Clients today, awaiting payment.
-        </p>
-      )}
     </div>
   );
 }

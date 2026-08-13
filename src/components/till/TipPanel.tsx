@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { staff } from "@/lib/data";
 import { zar } from "@/lib/format";
 import { creditable, roster } from "@/lib/roster";
@@ -12,13 +12,15 @@ interface TipPanelProps {
   /** Stylists already on the sale, offered first in the dropdown. */
   suggestedIds: number[];
   onTip: (stylistId: number, amount: number) => void;
+  /** Shares this strip — the gift voucher action, so the panel keeps its height. */
+  extra?: ReactNode;
 }
 
 /**
  * Tips, with an operator dropdown so anyone can be tipped — including the
  * assistants, who earn tips daily but never appear on the invoice lines.
  */
-export function TipPanel({ tips, suggestedIds, onTip }: TipPanelProps) {
+export function TipPanel({ tips, suggestedIds, onTip, extra }: TipPanelProps) {
   const [adding, setAdding] = useState(false);
   const [who, setWho] = useState<number | "">(suggestedIds[0] ?? "");
   const [amount, setAmount] = useState("");
@@ -44,21 +46,24 @@ export function TipPanel({ tips, suggestedIds, onTip }: TipPanelProps) {
     staffRecords.find((r) => r.id === id)?.name ?? staff.find((s) => s.id === id)?.name ?? "Unknown";
 
   return (
-    <div className="shrink-0 border-t border-edge-faint px-5 py-3">
-      <div className="mb-1.5 flex items-center justify-between">
+    <div className="shrink-0 border-t border-edge-faint px-5 py-2">
+      <div className="mb-1 flex items-center justify-between gap-3">
         <p className="text-[10.5px] uppercase tracking-[0.1em] text-faintink">Tip</p>
-        {!adding && (
-          <button
-            type="button"
-            onClick={() => {
-              setAdding(true);
-              setWho(suggestedIds[0] ?? "");
-            }}
-            className="text-[11.5px] font-semibold text-taupe transition-colors hover:text-taupe-deep"
-          >
-            + Add tip
-          </button>
-        )}
+        <span className="flex items-center gap-4">
+          {extra}
+          {!adding && (
+            <button
+              type="button"
+              onClick={() => {
+                setAdding(true);
+                setWho(suggestedIds[0] ?? "");
+              }}
+              className="text-[11.5px] font-semibold text-taupe transition-colors hover:text-taupe-deep"
+            >
+              + Add tip
+            </button>
+          )}
+        </span>
       </div>
 
       {tips.length > 0 && (

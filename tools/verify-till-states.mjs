@@ -170,6 +170,15 @@ await sleep(1400);
 text = await evaluate(`document.body.innerText.replace(/\\s+/g,' ')`);
 const completed = /Sale complete/.test(text);
 check("6 over-tender completes and reports change", completed, completed ? "toast shown" : text.slice(0, 80));
+/* Reception has to hand cash back, so the change has to be on the screen. */
+const toastText = await evaluate(`(() => {
+  const el = Array.from(document.querySelectorAll('[role="status"]')).find(x => /Sale complete/.test(x.innerText));
+  return el ? el.innerText.replace(/\\u00a0/g," ").replace(/\\s+/g," ") : "";
+})()`);
+check("6 the change is named on the toast", /Change R ?[\d ]+/i.test(toastText ?? ""), toastText);
+check("6 the invoice shows what was tendered and the change",
+  /Tendered/i.test(text) && /Change/i.test(text),
+  (text.match(/Tendered R ?[\d ,]+ Change R ?[\d ,]+/i) ?? [""])[0]);
 await shot("s6-change-toast");
 
 // STATE 7: just completed

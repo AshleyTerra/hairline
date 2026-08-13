@@ -88,7 +88,12 @@ await sleep(1400);
 check("Save button offered next to the primary", await ev(`
   Array.from(document.querySelectorAll('button')).some(b => b.textContent.trim() === 'Save')
 `));
-check("explains where Save puts it", /awaiting payment/i.test(await text()));
+/* The standing hint gave up its line so the keypad fits a short screen; the
+   Save button carries it, and the confirmation says it again once saved. */
+check("explains where Save puts it", await ev(`(() => {
+  const b = Array.from(document.querySelectorAll('button')).find(x => x.textContent.trim() === 'Save');
+  return /awaiting payment/i.test(b?.getAttribute('title') ?? '');
+})()`));
 const primary = await ev(`
   Array.from(document.querySelectorAll('button')).map(b=>b.textContent.trim()).find(t=>/still owing|^Take R/.test(t))
 `);

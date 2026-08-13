@@ -18,6 +18,10 @@ export interface InvoiceSlipData {
   vat: number;
   tipTotal: number;
   dueTotal: number;
+  /** What was handed over, where that is more than the total. */
+  paid?: number;
+  /** Change given back, so the slip shows what the client left with. */
+  change?: number;
 }
 
 const METHOD_LABEL: Record<string, string> = {
@@ -135,7 +139,7 @@ export function InvoiceSlip({ data, onClose }: { data: InvoiceSlipData; onClose:
               </div>
             ))}
             <div className="mt-1 flex justify-between border-t border-hairline pt-1.5">
-              <dt className="font-semibold text-ink">Total paid</dt>
+              <dt className="font-semibold text-ink">Total</dt>
               <dd className="tnum text-base font-semibold text-ink">{zar(data.dueTotal)}</dd>
             </div>
             {data.payments.map((p, i) => (
@@ -144,6 +148,19 @@ export function InvoiceSlip({ data, onClose }: { data: InvoiceSlipData; onClose:
                 <dd className="tnum text-mutedink">{zar(p.amount)}</dd>
               </div>
             ))}
+            {/* Over-tendered cash: what went back across the counter. */}
+            {(data.change ?? 0) > 0 && (
+              <>
+                <div className="flex justify-between border-t border-hairline-soft pt-1.5">
+                  <dt className="text-mutedink">Tendered</dt>
+                  <dd className="tnum text-mutedink">{zar(data.paid ?? data.dueTotal)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="font-semibold text-ink">Change</dt>
+                  <dd className="tnum font-semibold text-ink">{zar(data.change ?? 0)}</dd>
+                </div>
+              </>
+            )}
           </dl>
 
           <p className="mt-4 border-t border-hairline pt-3 text-center text-[10px] leading-relaxed text-mutedink">

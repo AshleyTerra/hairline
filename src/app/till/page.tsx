@@ -78,7 +78,9 @@ function TillCounter() {
     null
   );
   const [now, setNow] = useState(() => Date.now());
-  const [toast, setToast] = useState<{ total: number; seconds: number } | null>(null);
+  const [toast, setToast] = useState<{ total: number; seconds: number; change: number } | null>(
+    null
+  );
   const [query, setQuery] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("card");
   const [amount, setAmount] = useState("");
@@ -366,6 +368,8 @@ function TillCounter() {
       vat: t.vat,
       tipTotal: t.tipTotal,
       dueTotal: t.dueTotal,
+      paid: t.paid,
+      change: t.change,
     });
     if (docketNo != null) setDockets(closeDocket(dockets, docketNo));
     setDocketNo(null);
@@ -380,7 +384,7 @@ function TillCounter() {
       tips: state.tips,
       seconds,
     });
-    setToast({ total: t.subtotal, seconds });
+    setToast({ total: t.subtotal, seconds, change: t.change });
     dispatch({ type: "clear" });
     setAmount("");
     setMethod("card");
@@ -459,8 +463,11 @@ function TillCounter() {
               role="status"
               className="shrink-0 rounded-[10px] border border-good bg-good-soft px-4 py-3 text-[13px] text-good"
             >
-              <strong>Sale complete — {zar(toast.total)}.</strong> Rung up in {toast.seconds}{" "}
-              second{toast.seconds === 1 ? "" : "s"}
+              <strong>
+                Sale complete — {zar(toast.total)}
+                {toast.change > 0 ? `. Change ${zar(toast.change)}` : ""}.
+              </strong>{" "}
+              Rung up in {toast.seconds} second{toast.seconds === 1 ? "" : "s"}
               {toast.seconds <= 30 ? " — inside the 30-second target." : "."}
             </div>
           )}
@@ -501,7 +508,9 @@ function TillCounter() {
         </div>
 
         {/* Receipt */}
-        <aside className="flex min-h-0 flex-col overflow-y-auto border-t border-edge bg-white lg:border-l lg:border-t-0">
+        {/* The panel itself never scrolls: only the lines do, so the keypad and
+            the primary action stay in view on a short screen. */}
+        <aside className="flex min-h-0 flex-col overflow-y-auto border-t border-edge bg-white lg:overflow-hidden lg:border-l lg:border-t-0">
           <ClientPicker
             clientId={till.clientId}
             clientName={till.clientName}
@@ -512,7 +521,7 @@ function TillCounter() {
           />
 
           {/* Lines — a floor height so a tall keypad can never squeeze them away */}
-          <div className="min-h-[150px] flex-1 shrink-0 overflow-y-auto py-1.5">
+          <div className="min-h-[110px] flex-1 overflow-y-auto py-1 lg:min-h-[48px]">
             {!hasLines ? (
               <p className="px-4 py-10 text-center text-[14px] text-faintink">
                 Pick a service or product to start.
@@ -643,20 +652,23 @@ function TillCounter() {
             )}
           </div>
 
-          {/* A voucher goes on the docket alongside the cut and the shampoo. */}
-          <div className="flex shrink-0 items-center gap-3 border-t border-edge-faint px-5 py-2.5">
-            <button
-              type="button"
-              onClick={() => {
-                setVoucherError(null);
-                setSellingVoucher(true);
-              }}
-              className="text-[12px] font-semibold text-taupe transition-colors hover:text-taupe-deep"
-            >
-              + Gift voucher
-            </button>
-            <span className="text-[11px] text-faintink">Sold as a Hairline sale, no stylist</span>
-          </div>
+          {/* A voucher goes on the docket alongside the cut and the shampoo. It
+              shares the tip strip, so the panel keeps its height. */}
+          {!hasLines && (
+            <div className="flex shrink-0 items-center gap-3 border-t border-edge-faint px-5 py-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setVoucherError(null);
+                  setSellingVoucher(true);
+                }}
+                className="text-[12px] font-semibold text-taupe transition-colors hover:text-taupe-deep"
+              >
+                + Gift voucher
+              </button>
+              <span className="text-[11px] text-faintink">A Hairline sale, no stylist</span>
+            </div>
+          )}
 
           {hasLines && (
             <>
@@ -664,11 +676,24 @@ function TillCounter() {
                 tips={till.tips}
                 suggestedIds={tipStylists.map((s) => s.id)}
                 onTip={(stylistId, amount) => dispatch({ type: "tip", stylistId, amount })}
+                extra={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVoucherError(null);
+                      setSellingVoucher(true);
+                    }}
+                    title="Sold as a Hairline sale, with no stylist against it"
+                    className="text-[11.5px] font-semibold text-taupe transition-colors hover:text-taupe-deep"
+                  >
+                    + Gift voucher
+                  </button>
+                }
               />
 
               {/* Totals — the anchor of the screen */}
               <div
-                className={`px-5 py-[18px] text-white transition-colors duration-200 ${
+                className={`shrink-0 px-5 py-3 text-white transition-colors duration-200 ${
                   changeDue ? "bg-good" : "bg-taupe-deep"
                 }`}
               >
@@ -708,11 +733,11 @@ function TillCounter() {
                   </div>
                 ))}
 
-                <div className="mt-3 flex items-baseline justify-between border-t border-white/[0.18] pt-3">
+                <div className="mt-2 flex items-baseline justify-between border-t border-white/[0.18] pt-2">
                   <span className="text-[12px] uppercase tracking-[0.12em] text-[#e6e0d4]">
                     {changeDue ? "Change due" : "Balance"}
                   </span>
-                  <span className="tnum text-[40px] font-semibold leading-none tracking-[-0.025em]">
+                  <span className="tnum text-[32px] font-semibold leading-none tracking-[-0.025em]">
                     {zar(changeDue ? totals.change : totals.balance)}
                   </span>
                 </div>
