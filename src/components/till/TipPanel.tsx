@@ -47,8 +47,8 @@ export function TipPanel({ tips, suggestedIds, onTip, extra }: TipPanelProps) {
 
   return (
     <div className="shrink-0 border-t border-edge-faint px-5 py-2">
-      <div className="mb-1 flex items-center justify-between gap-3">
-        <p className="text-[10.5px] uppercase tracking-[0.1em] text-faintink">Tip</p>
+      {/* No heading: the actions say what they do, and the line is worth the height. */}
+      <div className="mb-1 flex items-center justify-end gap-3">
         <span className="flex items-center gap-4">
           {extra}
           {!adding && (
