@@ -23,7 +23,7 @@ export interface ReportSale {
   lines: ReportLine[];
 }
 
-/** Services, retail and salon stock, plus their total. */
+/** Services, retail and Stock Sales, plus their total. */
 export interface Split {
   services: number;
   retail: number;
@@ -73,10 +73,15 @@ export function splitTotals(lines: readonly ReportLine[]): Split {
 /**
  * Money the salon takes with nobody behind it — a gift voucher is paid for
  * before any work is done, so it belongs to Hairline rather than to a stylist.
- * MySalon calls this a stock sale; it reports under staff number 0.
+ *
+ * "Stock Sales" is the salon's own term, carried over from MySalon, and the
+ * feedback of 14 August asked for that one label everywhere rather than a
+ * mixture of "salon stock", "Hairline (salon)" and "stock sale". It reports
+ * under staff number 0, and a line here must never reach a stylist's figure —
+ * these numbers set wages.
  */
 export const SALON_ID = 0;
-export const SALON_NAME = "Hairline (salon)";
+export const SALON_NAME = "Stock Sales";
 
 export function addRow(a: Split, b: Split): Split {
   return {
@@ -167,7 +172,7 @@ export interface ItemTrackingFilter {
   descrs?: readonly string[];
   /** Null means every stylist. */
   stylistId?: number | null;
-  /** Which kinds to include; defaults to retail and salon stock. */
+  /** Which kinds to include; defaults to retail and Stock Sales. */
   kinds?: readonly LineKind[];
 }
 

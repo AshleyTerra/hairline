@@ -6,7 +6,9 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Badge, Card, PageHeader, TableScroll } from "@/components/ui";
 import { analytics, clients, getStaff, meta } from "@/lib/data";
+import { birthdayOf, clientBook } from "@/lib/clientBook";
 import { relativeToDemo, zar0 } from "@/lib/format";
+import { useStore } from "@/lib/store";
 
 type Filter = "all" | "lapsed" | "vip" | "birthday";
 
@@ -24,31 +26,44 @@ function ClientsList() {
   );
   const [query, setQuery] = useState("");
 
-  const demoMonth = meta.demoDate.slice(5, 7);
+  const demoMonth = Number(meta.demoDate.slice(5, 7));
+
+  /* One directory: the migrated file plus anyone captured at the counter. */
+  const { newClients } = useStore();
+  const book = useMemo(() => clientBook(clients, newClients), [newClients]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     const digits = q.replace(/\D/g, "");
 
-    return clients
+    return book
       .filter((c) => {
         if (filter === "lapsed" && !c.lapsed) return false;
         if (filter === "vip" && !c.vip) return false;
-        if (filter === "birthday" && c.birthday?.slice(5, 7) !== demoMonth) return false;
+        // Birthdays are day-and-month for new captures and a full date for the
+        // migrated file, so read the month rather than slicing a fixed offset.
+        if (filter === "birthday" && birthdayOf(c.birthday)?.month !== demoMonth) return false;
         if (!q) return true;
         if (c.name.toLowerCase().includes(q)) return true;
         return digits.length >= 3 && c.tel.replace(/\D/g, "").includes(digits);
       })
-      .sort((a, b) => (b.lastVisit ?? "").localeCompare(a.lastVisit ?? ""))
+      .sort((a, b) => {
+        // A client captured today has no visit yet, but reception has just typed
+        // them in — so they belong at the top, not the bottom.
+        if (!a.lastVisit && !b.lastVisit) return a.id - b.id;
+        if (!a.lastVisit) return -1;
+        if (!b.lastVisit) return 1;
+        return b.lastVisit.localeCompare(a.lastVisit);
+      })
       .slice(0, 200);
-  }, [filter, query, demoMonth]);
+  }, [book, filter, query, demoMonth]);
 
   return (
     <>
       <PageHeader
         eyebrow="Client relationships"
         title="Clients"
-        subtitle={`${clients.length} of Hairline's ${analytics.clientHealth.activeClients.toLocaleString("en-ZA")} active clients, with full visit history. Names are anonymised.`}
+        subtitle={`${book.length} of Hairline's ${analytics.clientHealth.activeClients.toLocaleString("en-ZA")} active clients, with full visit history. Names are anonymised.`}
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">

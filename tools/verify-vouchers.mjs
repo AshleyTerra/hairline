@@ -277,12 +277,13 @@ const xl = existsSync(DL) ? readdirSync(DL).filter((f) => f.includes("vouchers")
 check("the report exports to Excel", xl.length > 0, xl[0] ?? "none");
 
 // And the money must be a Hairline sale, not a stylist's.
-check("staff turnover reports the voucher under Hairline", await choose("Report type", "Staff turnover report"));
+check("staff turnover reports the voucher under Stock Sales", await choose("Report type", "Staff turnover report"));
 await sleep(1800);
 const turnover = await text();
-check("Hairline has a row of its own", /Hairline \(salon\)/i.test(turnover));
-check("the voucher sits in salon stock, not services",
-  /Hairline \(salon\)[^A-Za-z]{0,80}R 1 000/.test(turnover.replace(/\s+/g, " ")) ||
+/* The salon asked for one familiar label everywhere: "Stock Sales". */
+check("Stock Sales has a row of its own", /Stock Sales/i.test(turnover));
+check("the voucher sits in Stock Sales, not services",
+  /Stock Sales[^A-Za-z]{0,80}R 1 000/.test(turnover.replace(/\s+/g, " ")) ||
     /R 1 000/.test(turnover),
   (turnover.match(/0 Hairline \(salon\)[^A-Z]{0,100}/) ?? [""])[0]);
 await shot("v9-turnover-hairline");

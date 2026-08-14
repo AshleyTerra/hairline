@@ -1,7 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { clients, getStaff } from "@/lib/data";
+import { clientBook, findClient } from "@/lib/clientBook";
 import { initials } from "@/lib/format";
+import { useStore } from "@/lib/store";
 
 interface ClientPickerProps {
   clientId: number | null;
@@ -28,7 +31,11 @@ export function ClientPicker({
   onAddClient,
   onClear,
 }: ClientPickerProps) {
-  const client = clientId != null ? clients.find((c) => c.id === clientId) : undefined;
+  /* A client captured at the counter carries a negative id, so the migrated file
+     alone would not resolve them and their details would read blank. */
+  const { newClients } = useStore();
+  const book = useMemo(() => clientBook(clients, newClients), [newClients]);
+  const client = clientId != null ? findClient(book, clientId) : undefined;
 
   if (!clientName) {
     return (
@@ -94,10 +101,12 @@ export function ClientPicker({
             {docketNumber != null && (
               <span className="tnum mr-1 text-taupe-deep">Docket #{docketNumber} ·</span>
             )}
-            {client
-              ? `${client.visitCount} visits${stylist ? ` · usually ${stylist.name}` : ""}`
-              : clientId != null && clientId < 0
-                ? "New client, added today"
+            {/* A capture resolves now, but "0 visits" tells reception less than
+                saying so plainly — they typed the name in a moment ago. */}
+            {clientId != null && clientId < 0
+              ? "New client, added today"
+              : client
+                ? `${client.visitCount} visits${stylist ? ` · usually ${stylist.name}` : ""}`
                 : "Walk-in — no client file"}
           </p>
         </div>

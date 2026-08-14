@@ -5,6 +5,8 @@ import {
   exVat,
   itemTracking,
   itemTrackingTotals,
+  SALON_ID,
+  SALON_NAME,
   splitTotals,
   staffTurnover,
   turnoverByDate,
@@ -121,6 +123,52 @@ describe("staff turnover, one row per staff member", () => {
 
   it("sorts biggest earner first", () => {
     expect(staffTurnover(SALES, [1, 2]).map((r) => r.stylistId)).toEqual([1, 2]);
+  });
+});
+
+describe("Stock Sales, the salon's own row", () => {
+  /* The salon asked for one familiar label everywhere. "Stock Sales" is it. */
+  it("is called Stock Sales", () => {
+    expect(SALON_NAME).toBe("Stock Sales");
+  });
+
+  it("reports under staff number 0", () => {
+    expect(SALON_ID).toBe(0);
+  });
+
+  it("collects the lines no stylist earned, and gives them to nobody else", () => {
+    const voucherSale: ReportSale[] = [
+      sale({
+        date: "2026-07-01",
+        lines: [
+          { descr: "Cut", qty: 1, price: 300, disc: 0, stylistId: 1, kind: "service" },
+          { descr: "Gift voucher", qty: 1, price: 500, disc: 0, stylistId: SALON_ID, kind: "stock" },
+        ],
+      }),
+    ];
+    const rows = staffTurnover(voucherSale, [SALON_ID, 1]);
+    const salon = rows.find((r) => r.stylistId === SALON_ID);
+    const stylist = rows.find((r) => r.stylistId === 1);
+
+    expect(salon?.inclVat.stock).toBe(500);
+    expect(salon?.inclVat.services).toBe(0);
+    /* The voucher must never reach a stylist's figure — it sets their wage. */
+    expect(stylist?.inclVat.total).toBe(300);
+  });
+
+  it("keeps a walk-in's service work with the stylist, not with the salon", () => {
+    /* A walk-in has no client file, but somebody still did the work. There is
+       no separate walk-in row: the docket goes to a stylist or to Stock Sales. */
+    const walkIn: ReportSale[] = [
+      sale({
+        client: "Walk-in",
+        date: "2026-07-01",
+        lines: [{ descr: "Blow-dry", qty: 1, price: 250, disc: 0, stylistId: 2, kind: "service" }],
+      }),
+    ];
+    const rows = staffTurnover(walkIn, [SALON_ID, 2]);
+    expect(rows.find((r) => r.stylistId === 2)?.inclVat.services).toBe(250);
+    expect(rows.find((r) => r.stylistId === SALON_ID)?.inclVat.total).toBe(0);
   });
 });
 

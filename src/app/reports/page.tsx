@@ -35,7 +35,7 @@ const defaultFrom = (() => {
 const CATEGORIES = [
   { key: "services", label: "Services" },
   { key: "retail", label: "Retail" },
-  { key: "stock", label: "Salon stock" },
+  { key: "stock", label: "Stock Sales" },
   { key: "total", label: "Total" },
 ] as const;
 
@@ -129,8 +129,8 @@ export default function ReportsPage() {
     { key: "servicesIncl" as const, label: "Services (incl VAT)" },
     { key: "retailEx" as const, label: "Retail (excl VAT)" },
     { key: "retailIncl" as const, label: "Retail (incl VAT)" },
-    { key: "stockEx" as const, label: "Salon stock (excl VAT)" },
-    { key: "stockIncl" as const, label: "Salon stock (incl VAT)" },
+    { key: "stockEx" as const, label: "Stock Sales (excl VAT)" },
+    { key: "stockIncl" as const, label: "Stock Sales (incl VAT)" },
     { key: "totalEx" as const, label: "Total (excl VAT)" },
     { key: "totalIncl" as const, label: "Total (incl VAT)" },
   ];

@@ -119,8 +119,14 @@ await ev(`(() => { const el = Array.from(document.querySelectorAll('button')).fi
 await sleep(900);
 const dialogOpen = await ev(`!!document.querySelector('[aria-label="Add a new client"]')`);
 check("new-client dialog opens", dialogOpen);
+/* A full client file now insists on mobile, email and birthday. Reception's
+   quick path mid-sale is the Walk-in kind, which needs only a name. */
+await ev(`(() => {
+  const b = Array.from(document.querySelectorAll('[role="dialog"] button')).find(x => x.textContent.trim() === 'Walk-in');
+  if (b) { b.click(); return true; } return false;
+})()`);
+await sleep(400);
 await setV('input[type="text"]', "Thandi Nkosi");
-await setV('input[type="tel"]', "082 123 4567");
 await sleep(400);
 await click("Save & use");
 await sleep(1400);

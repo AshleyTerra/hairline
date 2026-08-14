@@ -6,17 +6,28 @@ import { notFound } from "next/navigation";
 import { Badge, Card, CardTitle, PageHeader } from "@/components/ui";
 import { StatTile } from "@/components/charts";
 import { getClient, getStaff, loadVisits, meta } from "@/lib/data";
+import { asClient } from "@/lib/clientBook";
 import { longDate, phone, relativeToDemo, shortDate, zar, zar0 } from "@/lib/format";
+import { useStore } from "@/lib/store";
 import type { Visit } from "@/lib/types";
 
 export default function ClientPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const client = getClient(Number(id));
 
-  const [visits, setVisits] = useState<Visit[] | null>(null);
+  /* Captures carry a negative id and are not in the migrated file, so look
+     there too — otherwise a client added at the till has no file to open. */
+  const { newClients } = useStore();
+  const captured = newClients.find((c) => c.id === Number(id));
+  const client = getClient(Number(id)) ?? (captured ? asClient(captured) : undefined);
+
+  /* A client captured today has no history to fetch, so start them at "none"
+     rather than at "still loading" — nothing will ever arrive. */
+  const isCapture = Number(id) < 0;
+  const [visits, setVisits] = useState<Visit[] | null>(isCapture ? [] : null);
   const [messageOpen, setMessageOpen] = useState(false);
 
   useEffect(() => {
+    if (isCapture) return;
     let active = true;
     loadVisits(Number(id)).then((v) => {
       if (active) setVisits(v);
@@ -24,7 +35,7 @@ export default function ClientPage({ params }: { params: Promise<{ id: string }>
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, isCapture]);
 
   if (!client) notFound();
 

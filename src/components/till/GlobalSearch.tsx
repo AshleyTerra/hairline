@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clients, meta, products, services } from "@/lib/data";
+import { clientBook, searchBook } from "@/lib/clientBook";
 import { relativeToDemo, zar } from "@/lib/format";
+import { useStore } from "@/lib/store";
 import type { Client, Product, Service } from "@/lib/types";
 
 interface GlobalSearchProps {
@@ -29,17 +31,15 @@ export function GlobalSearch({
 
   const q = query.trim().toLowerCase();
 
+  /* Searches the migrated file and anyone captured at the counter today, so a
+     client added mid-sale can be found again a minute later. */
+  const { newClients } = useStore();
+  const book = useMemo(() => clientBook(clients, newClients), [newClients]);
+
   const matches = useMemo(() => {
     if (!q) return { clients: [], services: [], products: [] };
-    const digits = q.replace(/\D/g, "");
     return {
-      clients: clients
-        .filter(
-          (c) =>
-            c.name.toLowerCase().includes(q) ||
-            (digits.length >= 3 && c.tel.replace(/\D/g, "").includes(digits))
-        )
-        .slice(0, LIMIT),
+      clients: searchBook(book, q, LIMIT),
       services: services.filter((s) => s.name.toLowerCase().includes(q)).slice(0, LIMIT),
       products: products.till
         .filter(
@@ -50,7 +50,7 @@ export function GlobalSearch({
         )
         .slice(0, LIMIT),
     };
-  }, [q]);
+  }, [q, book]);
 
   const total = matches.clients.length + matches.services.length + matches.products.length;
 

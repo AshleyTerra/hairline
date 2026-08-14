@@ -13,7 +13,7 @@ export const REPORTS: { key: ReportKind; label: string; blurb: string }[] = [
   {
     key: "staffTurnover",
     label: "Staff turnover report",
-    blurb: "One row per staff member — services, retail and salon stock, for checking wages.",
+    blurb: "One row per staff member — services, retail and Stock Sales, for checking wages.",
   },
   {
     key: "dailyStaffTurnover",

@@ -294,7 +294,17 @@ export interface NewClient {
   name: string;
   tel: string;
   email: string;
+  /**
+   * Day and month only, as "--MM-DD". The salon wants birthdays for greetings,
+   * not ages, and the migrated file's years are MySalon artefacts anyway.
+   */
+  birthday: string;
   notes: string;
+  /**
+   * True when captured under the simplified walk-in rule. Marked so a
+   * deliberately incomplete record is never mistaken for a full client file.
+   */
+  walkIn: boolean;
 }
 
 /** A completed sale rung up in the prototype. */
