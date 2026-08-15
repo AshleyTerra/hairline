@@ -14,6 +14,8 @@ export function RedeemVoucherDialog({
   owing,
   today,
   error,
+  stylists,
+  defaultStylistId,
   onRedeem,
   onClose,
 }: {
@@ -22,12 +24,17 @@ export function RedeemVoucherDialog({
   owing: number;
   today: string;
   error?: string | null;
-  onRedeem: (voucher: Voucher, amount: number) => void;
+  /** Who the redeemed work can be credited to. */
+  stylists: readonly { id: number; name: string }[];
+  /** Whoever is already on the sale, offered first. */
+  defaultStylistId: number | null;
+  onRedeem: (voucher: Voucher, amount: number, stylistId: number | null) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<Voucher | null>(null);
   const [amount, setAmount] = useState("");
+  const [stylistId, setStylistId] = useState<number | "">(defaultStylistId ?? "");
 
   const matches = useMemo(() => findVouchers(vouchers, query).slice(0, 8), [vouchers, query]);
   const left = picked ? balanceOf(picked) : 0;
@@ -53,7 +60,9 @@ export function RedeemVoucherDialog({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (picked) onRedeem(picked, Number(amount) || 0);
+          if (picked) {
+            onRedeem(picked, Number(amount) || 0, stylistId === "" ? null : Number(stylistId));
+          }
         }}
         noValidate
         className="w-full max-w-sm rounded-lg border border-hairline bg-card"
@@ -162,6 +171,32 @@ export function RedeemVoucherDialog({
                 />
                 <span className="mt-1 block text-xs text-mutedink">
                   Anything left stays on the voucher for their next visit.
+                </span>
+              </label>
+
+              {/* Who did the work. The money was banked when the voucher was
+                  sold, so this credits their turnover without the salon
+                  counting the same rand a second time. */}
+              <label className="block">
+                <span className={legend}>Work done by</span>
+                <select
+                  value={stylistId}
+                  onChange={(e) =>
+                    setStylistId(e.target.value === "" ? "" : Number(e.target.value))
+                  }
+                  aria-label="Stylist the redeemed work belongs to"
+                  className={field}
+                >
+                  <option value="">Nobody — a salon sale</option>
+                  {stylists.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs text-mutedink">
+                  Counts towards their turnover for wages. The salon banked the money when the
+                  voucher was sold, so it is not taken as turnover twice.
                 </span>
               </label>
             </>

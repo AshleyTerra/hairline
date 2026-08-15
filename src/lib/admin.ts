@@ -201,6 +201,87 @@ export function reconcilePermissions(
   return { permissions, knownKeys: current, added };
 }
 
+// ------------------------------------------------------------- abilities
+
+/**
+ * Permissions above say which screens a role may open. Abilities say what a role
+ * may *do* once inside one — changing a price at the counter is not the same
+ * decision as being allowed to work the till at all, and the feedback of
+ * 14 August asked for the pricing controls to be permission controlled.
+ */
+export interface AbilityDef {
+  key: string;
+  label: string;
+  description: string;
+}
+
+export const ABILITIES: readonly AbilityDef[] = [
+  {
+    key: "costPrice",
+    label: "Sell at cost price",
+    description: "Charge a retail item at what the salon paid, VAT included",
+  },
+  {
+    key: "priceOverride",
+    label: "Override a line's price",
+    description: "Type an exact amount for a line instead of the menu price",
+  },
+  {
+    key: "stockMaintenance",
+    label: "Add and edit stock",
+    description: "Change a brand, barcode, cost or price from the Stock screen",
+  },
+];
+
+export type Abilities = Record<Role, string[]>;
+
+/**
+ * Reception works the counter, so they hold both — a client waiting at the desk
+ * cannot be kept there while somebody is found to approve a price. Stylists hold
+ * neither: their own screens do not ring anything up.
+ */
+export const DEFAULT_ABILITIES: Abilities = {
+  owner: ABILITIES.map((a) => a.key),
+  reception: ["costPrice", "priceOverride", "stockMaintenance"],
+  stylist: [],
+};
+
+export const ABILITY_KEYS: readonly string[] = ABILITIES.map((a) => a.key);
+
+export const canDo = (abilities: Abilities, role: Role, ability: string): boolean =>
+  (abilities[role] ?? []).includes(ability);
+
+export function toggleAbility(abilities: Abilities, role: Role, ability: string): Abilities {
+  const current = abilities[role] ?? [];
+  const next = current.includes(ability)
+    ? current.filter((a) => a !== ability)
+    : [...current, ability];
+  return { ...abilities, [role]: next };
+}
+
+/**
+ * Same problem as the screens: a list saved in the browser predates any ability
+ * added since, which would silently withhold it. Grant anything new by the
+ * defaults for that role and leave deliberate choices alone.
+ */
+export function reconcileAbilities(
+  stored: Abilities,
+  knownKeys: readonly string[]
+): { abilities: Abilities; knownKeys: string[]; added: string[] } {
+  const current = [...ABILITY_KEYS];
+  const added = current.filter((key) => !knownKeys.includes(key));
+  if (added.length === 0) return { abilities: stored, knownKeys: current, added };
+
+  const abilities = { ...stored };
+  for (const role of Object.keys(abilities) as Role[]) {
+    const grant = added.filter((key) => (DEFAULT_ABILITIES[role] ?? []).includes(key));
+    if (grant.length > 0) {
+      abilities[role] = [...new Set([...(abilities[role] ?? []), ...grant])];
+    }
+  }
+  return { abilities, knownKeys: current, added };
+}
+
 /**
  * Where a role should land. Reception has no dashboard, so sending everyone to
  * "/" would drop them on a screen their own role forbids.

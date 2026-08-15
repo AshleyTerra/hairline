@@ -83,9 +83,25 @@ export function Empty({ children }: { children: ReactNode }) {
   );
 }
 
-/** Wraps wide content so the page body never scrolls sideways. */
-export function TableScroll({ children }: { children: ReactNode }) {
-  return <div className="overflow-x-auto">{children}</div>;
+/**
+ * Wraps wide content so the page body never scrolls sideways.
+ *
+ * `cap` also holds the height, so a long result set scrolls inside its own frame
+ * rather than pushing the criteria and the export buttons off the top of the
+ * screen. The print stylesheet lifts the cap, so paper still gets every row.
+ */
+export function TableScroll({
+  children,
+  cap = false,
+}: {
+  children: ReactNode;
+  cap?: boolean;
+}) {
+  return (
+    <div className={cap ? "list-scroll max-h-[34rem] overflow-auto" : "overflow-x-auto"}>
+      {children}
+    </div>
+  );
 }
 
 /**

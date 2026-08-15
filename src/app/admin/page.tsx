@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PageHeader, Card } from "@/components/ui";
 import { UsersPanel } from "@/components/admin/UsersPanel";
 import { PermissionsPanel } from "@/components/admin/PermissionsPanel";
+import { AbilitiesPanel } from "@/components/admin/AbilitiesPanel";
 import { ExportPanel } from "@/components/admin/ExportPanel";
 import { ImportClientsPanel } from "@/components/admin/ImportClientsPanel";
 import { RestorePanel } from "@/components/admin/RestorePanel";
@@ -124,7 +125,12 @@ export default function AdminPage() {
       {active === "staff" && <StaffPanel />}
       {active === "stock" && <StockAdminPanel />}
       {active === "users" && <UsersPanel />}
-      {active === "permissions" && <PermissionsPanel />}
+      {active === "permissions" && (
+        <div className="flex flex-col gap-4">
+          <PermissionsPanel />
+          <AbilitiesPanel />
+        </div>
+      )}
     </>
   );
 }

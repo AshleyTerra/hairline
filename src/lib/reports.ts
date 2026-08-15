@@ -14,6 +14,11 @@ export interface ReportLine {
   disc: number;
   stylistId: number;
   kind: LineKind;
+  /**
+   * The exact amount for the line, when one was typed at the counter. Preferred
+   * over price x qty so a fixed final value reports as the figure charged.
+   */
+  value?: number;
 }
 
 export interface ReportSale {
@@ -51,7 +56,9 @@ export const exVat = (inclusive: number): number => round(inclusive / (1 + VAT_R
 export const emptySplit = (): Split => ({ services: 0, retail: 0, stock: 0, total: 0 });
 
 export const lineValue = (line: ReportLine): number =>
-  round(line.price * (line.qty ?? 1) * (1 - (line.disc ?? 0) / 100));
+  line.value != null
+    ? round(line.value)
+    : round(line.price * (line.qty ?? 1) * (1 - (line.disc ?? 0) / 100));
 
 export function splitTotals(lines: readonly ReportLine[]): Split {
   const split = emptySplit();

@@ -22,7 +22,12 @@ import {
   type LineKind,
 } from "@/lib/reports";
 import { catalogue, salesBetween } from "@/lib/salesSource";
-import { voucherReport, voucherTotals } from "@/lib/vouchers";
+import {
+  outstandingAt,
+  redeemedBetween,
+  voucherReport,
+  voucherTotals,
+} from "@/lib/vouchers";
 import { useStore } from "@/lib/store";
 
 /** A fortnight back from the demo day is a sensible default period. */
@@ -96,6 +101,11 @@ export default function ReportsPage() {
 
   const turnoverRows = kind === "staffTurnover" ? staffRows : dailyRows;
   const totals = useMemo(() => sumRows(turnoverRows), [turnoverRows]);
+
+  /* What has to come off business turnover for the period, and what the salon
+     still owes on unspent balances. */
+  const redeemedInPeriod = useMemo(() => redeemedBetween(vouchers, from, to), [vouchers, from, to]);
+  const outstandingLiability = useMemo(() => outstandingAt(vouchers, to), [vouchers, to]);
   const itemTotals = useMemo(() => itemTrackingTotals(itemRows), [itemRows]);
 
   const report = REPORTS.find((r) => r.key === kind);
@@ -311,7 +321,9 @@ export default function ReportsPage() {
           </p>
         </header>
 
-        <TableScroll>
+        {/* Item tracking can run to hundreds of lines; it scrolls inside its
+            own frame so the filters and the export buttons stay put. */}
+        <TableScroll cap={isItems}>
           {isVouchers ? (
             <table className="w-full text-sm">
               <thead>
@@ -513,6 +525,52 @@ export default function ReportsPage() {
             </table>
           )}
         </TableScroll>
+
+        {/*
+          A voucher is paid for when it is sold and spent later. The stylist keeps
+          the service value in the rows above, because that is what their wage is
+          worked out from — but the salon banked the money the first time, so it
+          cannot count as business turnover twice. This is where the two meet.
+        */}
+        {kind === "staffTurnover" && turnoverRows.length > 0 && redeemedInPeriod > 0 && (
+          <div className="border-t border-hairline px-4 py-3">
+            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-mutedink">
+              Reconciling to business turnover
+            </h3>
+            <dl className="max-w-md text-sm">
+              <div className="flex justify-between gap-4 py-1">
+                <dt className="text-body">Stylist turnover and Stock Sales</dt>
+                <dd className="tnum text-ink">{zar(totals.inclVat.total)}</dd>
+              </div>
+              <div className="flex justify-between gap-4 py-1">
+                <dt className="text-body">
+                  less voucher redemptions
+                  <span className="block text-[11px] text-mutedink">
+                    banked when the voucher was sold
+                  </span>
+                </dt>
+                <dd className="tnum text-crit">−{zar(redeemedInPeriod)}</dd>
+              </div>
+              <div className="flex justify-between gap-4 border-t border-hairline-soft py-1.5 font-semibold">
+                <dt className="text-ink">Business turnover</dt>
+                <dd className="tnum text-ink">
+                  {zar(Math.max(0, totals.inclVat.total - redeemedInPeriod))}
+                </dd>
+              </div>
+              {outstandingLiability > 0 && (
+                <div className="mt-2 flex justify-between gap-4 border-t border-hairline-soft pt-2">
+                  <dt className="text-body">
+                    Still owed to voucher holders
+                    <span className="block text-[11px] text-mutedink">
+                      unspent balances, not yet earned
+                    </span>
+                  </dt>
+                  <dd className="tnum text-ink">{zar(outstandingLiability)}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        )}
 
         {isItems && itemRows.length > 400 && (
           <p className="no-print border-t border-hairline-soft px-4 py-2 text-xs text-mutedink">

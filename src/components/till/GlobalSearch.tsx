@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { clients, meta, products, services } from "@/lib/data";
+import { clients, meta, services } from "@/lib/data";
 import { clientBook, searchBook } from "@/lib/clientBook";
 import { relativeToDemo, zar } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -13,6 +13,8 @@ interface GlobalSearchProps {
   onPickProduct: (product: Product) => void;
   /** Mirrors the query out so the catalogue can filter alongside the dropdown. */
   onQueryChange?: (query: string) => void;
+  /** Retail as the salon maintains it, so a corrected barcode scans. */
+  items: Product[];
 }
 
 const LIMIT = 4;
@@ -23,6 +25,7 @@ export function GlobalSearch({
   onPickService,
   onPickProduct,
   onQueryChange,
+  items,
 }: GlobalSearchProps) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -41,7 +44,7 @@ export function GlobalSearch({
     return {
       clients: searchBook(book, q, LIMIT),
       services: services.filter((s) => s.name.toLowerCase().includes(q)).slice(0, LIMIT),
-      products: products.till
+      products: items
         .filter(
           (p) =>
             p.name.toLowerCase().includes(q) ||
@@ -50,7 +53,7 @@ export function GlobalSearch({
         )
         .slice(0, LIMIT),
     };
-  }, [q, book]);
+  }, [q, book, items]);
 
   const total = matches.clients.length + matches.services.length + matches.products.length;
 
@@ -64,9 +67,11 @@ export function GlobalSearch({
 
   function update(value: string) {
     // A scanned barcode resolves to exactly one product: add it and clear.
+    // Matched against the maintained list, so a code corrected on the Stock
+    // screen scans here without waiting for a rebuild.
     const scanned = value.trim();
     if (scanned.length >= 8 && /^\d+$/.test(scanned)) {
-      const hit = products.till.filter((p) => p.barcode === scanned);
+      const hit = items.filter((p) => p.barcode === scanned);
       if (hit.length === 1) {
         onPickProduct(hit[0]);
         clear();

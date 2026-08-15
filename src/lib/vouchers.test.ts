@@ -8,7 +8,9 @@ import {
   isExpired,
   issueVoucher,
   nextVoucherNumber,
+  outstandingAt,
   redeem,
+  redeemedBetween,
   usedOf,
   voucherLine,
   voucherReport,
@@ -257,5 +259,93 @@ describe("the vouchers report", () => {
 
   it("copes with a range given back to front", () => {
     expect(voucherReport(all, "2026-08-13", "2026-05-13")).toHaveLength(2);
+  });
+});
+
+// ------------------------------------------------- HF-03: voucher accounting
+
+describe("who gets the credit for redeemed work", () => {
+  const sold = (): Voucher => {
+    const r = issueVoucher(
+      [],
+      {
+        recipientName: "Aunty Pat",
+        recipientTel: "076 408 9755",
+        amount: 1000,
+        expires: "2027-08-14",
+        barcode: "PAT-1",
+      },
+      { clientId: 7, clientName: "Thandi Nkosi", on: "2026-08-14" }
+    );
+    if (!r.ok) throw new Error("could not issue");
+    return r.voucher;
+  };
+
+  it("records the stylist who did the work", () => {
+    const r = redeem(sold(), 400, "2026-08-20", 93712, 3);
+    expect(r.ok && r.voucher.redemptions[0].stylistId).toBe(3);
+  });
+
+  it("still works when nobody is named", () => {
+    const r = redeem(sold(), 400, "2026-08-20");
+    expect(r.ok && r.voucher.redemptions[0].stylistId).toBeNull();
+  });
+
+  it("leaves the balance for next time", () => {
+    const r = redeem(sold(), 400, "2026-08-20", 93712, 3);
+    expect(r.ok && balanceOf(r.voucher)).toBe(600);
+  });
+});
+
+describe("reconciling vouchers for a period", () => {
+  const withRedemptions = (rs: { date: string; amount: number }[]): Voucher => ({
+    number: 1,
+    barcode: "V1",
+    clientId: null,
+    clientName: "Walk-in",
+    recipientName: "Aunty Pat",
+    recipientTel: "",
+    amount: 1000,
+    purchasedOn: "2026-08-01",
+    expires: "2027-08-01",
+    redemptions: rs.map((r) => ({ ...r, stylistId: 3 })),
+  });
+
+  it("totals what was redeemed inside the period", () => {
+    const v = withRedemptions([
+      { date: "2026-08-05", amount: 200 },
+      { date: "2026-08-20", amount: 300 },
+    ]);
+    expect(redeemedBetween([v], "2026-08-01", "2026-08-31")).toBe(500);
+  });
+
+  it("ignores redemptions outside it", () => {
+    const v = withRedemptions([
+      { date: "2026-07-30", amount: 200 },
+      { date: "2026-09-02", amount: 300 },
+    ]);
+    expect(redeemedBetween([v], "2026-08-01", "2026-08-31")).toBe(0);
+  });
+
+  it("includes both ends of the period", () => {
+    const v = withRedemptions([
+      { date: "2026-08-01", amount: 100 },
+      { date: "2026-08-31", amount: 100 },
+    ]);
+    expect(redeemedBetween([v], "2026-08-01", "2026-08-31")).toBe(200);
+  });
+
+  it("counts nothing when no voucher was touched", () => {
+    expect(redeemedBetween([], "2026-08-01", "2026-08-31")).toBe(0);
+  });
+
+  it("reports what the salon still owes voucher holders", () => {
+    const v = withRedemptions([{ date: "2026-08-05", amount: 400 }]);
+    expect(outstandingAt([v], "2026-08-31")).toBe(600);
+  });
+
+  it("drops an expired voucher from the liability", () => {
+    const v = { ...withRedemptions([]), expires: "2026-08-10" };
+    expect(outstandingAt([v], "2026-08-31")).toBe(0);
   });
 });

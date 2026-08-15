@@ -5,6 +5,10 @@ import { StatTile } from "@/components/charts";
 import { Badge, Card, PageHeader, TableScroll } from "@/components/ui";
 import { analytics, backbarValueOnHand, products, retailValueOnHand } from "@/lib/data";
 import { pct, zar, zar0 } from "@/lib/format";
+import { canDo } from "@/lib/admin";
+import { editStock, stockBook } from "@/lib/stockBook";
+import { StockDialog } from "@/components/stock/StockDialog";
+import { useStore } from "@/lib/store";
 import type { Product } from "@/lib/types";
 
 type Tab = "retail" | "backbar" | "order";
@@ -19,8 +23,25 @@ export default function StockPage() {
   const [tab, setTab] = useState<Tab>("retail");
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState("all");
+  /** null while closed; a Product when editing; "new" when adding. */
+  const [editing, setEditing] = useState<Product | "new" | null>(null);
 
-  const source = tab === "backbar" ? products.backbar : products.retail;
+  const { role, abilities, newStock, stockEdits, setStockEdits, addStock, archivedStock } =
+    useStore();
+  const mayMaintain = canDo(abilities, role, "stockMaintenance");
+
+  /* Migrated lines, plus anything added here, with corrections applied and
+     archived lines left out. The till reads the same book. */
+  const retail = useMemo(
+    () => stockBook(products.retail, newStock, stockEdits, archivedStock, "retail"),
+    [newStock, stockEdits, archivedStock]
+  );
+  const backbar = useMemo(
+    () => stockBook(products.backbar, newStock, stockEdits, archivedStock, "backbar"),
+    [newStock, stockEdits, archivedStock]
+  );
+
+  const source = tab === "backbar" ? backbar : retail;
 
   const brands = useMemo(
     () => ["all", ...[...new Set(source.map((p) => p.brand))].sort()],
@@ -31,7 +52,7 @@ export default function StockPage() {
     const q = query.trim().toLowerCase();
     const base =
       tab === "order"
-        ? [...products.retail, ...products.backbar].filter((p) => p.lowStock || p.needsCount)
+        ? [...retail, ...backbar].filter((p) => p.lowStock || p.needsCount)
         : source;
 
     return base
@@ -45,7 +66,7 @@ export default function StockPage() {
         );
       })
       .slice(0, 250);
-  }, [tab, source, query, brand]);
+  }, [tab, source, query, brand, retail, backbar]);
 
   const orderByVendor = useMemo(() => {
     if (tab !== "order") return [];
@@ -152,6 +173,18 @@ export default function StockPage() {
             ))}
           </select>
         )}
+
+        {/* Routine maintenance belongs here rather than in Admin — this is the
+            screen the person holding the delivery note is already looking at. */}
+        {mayMaintain && tab !== "order" && (
+          <button
+            type="button"
+            onClick={() => setEditing("new")}
+            className="ml-auto rounded bg-taupe-deep px-3 py-2 text-sm font-semibold text-white hover:bg-ink"
+          >
+            + Add item
+          </button>
+        )}
       </div>
 
       {tab === "order" ? (
@@ -224,6 +257,7 @@ export default function StockPage() {
                   <th className="px-4 py-2.5 text-right font-semibold">Sells for</th>
                   <th className="px-4 py-2.5 text-right font-semibold">Margin</th>
                   <th className="px-4 py-2.5 text-right font-semibold">On hand</th>
+                  {mayMaintain && <th className="px-4 py-2.5 text-right font-semibold">Edit</th>}
                 </tr>
               </thead>
               <tbody>
@@ -257,6 +291,18 @@ export default function StockPage() {
                         <span className="text-body">{p.qty}</span>
                       )}
                     </td>
+                    {mayMaintain && (
+                      <td className="px-4 py-2.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setEditing(p)}
+                          aria-label={`Edit ${p.name}`}
+                          className="rounded border border-hairline px-2 py-1 text-[11px] font-semibold text-taupe-deep hover:bg-chip"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -266,6 +312,32 @@ export default function StockPage() {
             <p className="px-4 py-10 text-center text-sm text-mutedink">Nothing matches.</p>
           )}
         </Card>
+      )}
+
+      {editing && (
+        <StockDialog
+          product={editing === "new" ? null : editing}
+          shelf={tab === "backbar" ? "backbar" : "retail"}
+          onClose={() => setEditing(null)}
+          onSave={(patch) => {
+            if (editing === "new") {
+              addStock([
+                {
+                  name: patch.name,
+                  brand: patch.brand,
+                  shelf: tab === "backbar" ? "backbar" : "retail",
+                  cost: patch.cost,
+                  price: patch.price,
+                  reorder: patch.reorder,
+                  barcode: patch.barcode,
+                },
+              ]);
+            } else {
+              setStockEdits(editStock(stockEdits, editing.id, patch));
+            }
+            setEditing(null);
+          }}
+        />
       )}
     </>
   );

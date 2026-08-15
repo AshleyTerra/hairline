@@ -24,6 +24,12 @@ export interface Redemption {
   amount: number;
   /** The invoice it was redeemed against, where there is one. */
   invoice?: number;
+  /**
+   * Who did the work the voucher paid for. The service value counts towards
+   * their turnover for wages, while the cash itself was banked when the voucher
+   * was sold — so it must not be counted as business turnover a second time.
+   */
+  stylistId?: number | null;
 }
 
 export interface Voucher {
@@ -184,7 +190,8 @@ export function redeem(
   voucher: Voucher,
   amount: number,
   on: string,
-  invoice?: number
+  invoice?: number,
+  stylistId?: number | null
 ): RedeemResult {
   const check = checkRedemption(voucher, amount, on);
   if (!check.ok) return check;
@@ -193,9 +200,43 @@ export function redeem(
     ok: true,
     voucher: {
       ...voucher,
-      redemptions: [...voucher.redemptions, { date: on, amount: round(amount), invoice }],
+      redemptions: [
+        ...voucher.redemptions,
+        { date: on, amount: round(amount), invoice, stylistId: stylistId ?? null },
+      ],
     },
   };
+}
+
+/**
+ * Everything redeemed in a period, across every voucher.
+ *
+ * This is the figure that has to come off business turnover: the salon banked
+ * the money when it sold the voucher, so counting the service it later paid for
+ * would count the same rand twice. The stylist still keeps it in their own
+ * figures, which is what the reconciliation on the report makes plain.
+ */
+export function redeemedBetween(
+  vouchers: readonly Voucher[],
+  from: string,
+  to: string
+): number {
+  let total = 0;
+  for (const v of vouchers) {
+    for (const r of v.redemptions) {
+      if (r.date >= from && r.date <= to) total += r.amount;
+    }
+  }
+  return round(total);
+}
+
+/** What is still owed to voucher holders — the salon's outstanding liability. */
+export function outstandingAt(vouchers: readonly Voucher[], on: string): number {
+  return round(
+    vouchers
+      .filter((v) => v.purchasedOn <= on && !isExpired(v, on))
+      .reduce((sum, v) => sum + balanceOf(v), 0)
+  );
 }
 
 export interface VoucherReportRow {

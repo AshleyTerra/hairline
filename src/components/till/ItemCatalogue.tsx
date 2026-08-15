@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { products, serviceDepts, services, tillVendors } from "@/lib/data";
+import { serviceDepts, services } from "@/lib/data";
 import { zar } from "@/lib/format";
+import { costIncl } from "@/lib/till";
 import type { Product, Service } from "@/lib/types";
 
 interface ItemCatalogueProps {
@@ -14,6 +15,10 @@ interface ItemCatalogueProps {
   clientsTab?: React.ReactNode;
   /** How many dockets are still open, shown on the tab. */
   openDockets?: number;
+  /** Shows each product's cost price, for whoever is allowed to see it. */
+  showCost?: boolean;
+  /** Retail as the salon maintains it, so an edit on Stock shows here. */
+  items: Product[];
 }
 
 type Tab = "services" | "retail" | "clients";
@@ -29,13 +34,25 @@ export function ItemCatalogue({
   query = "",
   clientsTab,
   openDockets = 0,
+  showCost = false,
+  items,
 }: ItemCatalogueProps) {
   // The till opens on the day's clients — that is where reception starts.
   const [tab, setTab] = useState<Tab>("clients");
   const [dept, setDept] = useState<string>(serviceDepts[0] ?? "");
-  const [vendor, setVendor] = useState<string>(tillVendors[0] ?? "");
+  const [vendor, setVendor] = useState<string>("");
 
   const q = query.trim().toLowerCase();
+
+  /* Brands come from the maintained list, so a range added this morning
+     has a tab this afternoon. */
+  const vendors = useMemo(() => {
+    const seen: string[] = [];
+    for (const p of items) if (!seen.includes(p.brand)) seen.push(p.brand);
+    return seen.sort((a, b) => a.localeCompare(b));
+  }, [items]);
+
+  const activeVendor = vendor || vendors[0] || "";
 
   const shownServices = useMemo(() => {
     if (q) {
@@ -49,7 +66,7 @@ export function ItemCatalogue({
 
   const shownProducts = useMemo(() => {
     if (q) {
-      return products.till
+      return items
         .filter(
           (p) =>
             p.name.toLowerCase().includes(q) ||
@@ -58,8 +75,8 @@ export function ItemCatalogue({
         )
         .slice(0, 60);
     }
-    return products.till.filter((p) => p.brand === vendor);
-  }, [vendor, q]);
+    return items.filter((p) => p.brand === activeVendor);
+  }, [activeVendor, q, items]);
 
   const empty =
     (tab === "services" && shownServices.length === 0) ||
@@ -92,8 +109,8 @@ export function ItemCatalogue({
 
         {tab !== "clients" &&
           !q &&
-          (tab === "services" ? serviceDepts : tillVendors).map((name) => {
-            const active = tab === "services" ? dept === name : vendor === name;
+          (tab === "services" ? serviceDepts : vendors).map((name) => {
+            const active = tab === "services" ? dept === name : activeVendor === name;
             return (
               <button
                 key={name}
@@ -158,8 +175,17 @@ export function ItemCatalogue({
                           {p.qty > 0 ? `${p.qty} on hand` : "not in stock"}
                         </span>
                       </span>
-                      <span className="tnum shrink-0 text-[14.5px] font-semibold text-ink">
-                        {zar(p.price)}
+                      <span className="shrink-0 text-right">
+                        <span className="tnum block text-[14.5px] font-semibold text-ink">
+                          {zar(p.price)}
+                        </span>
+                        {/* The cost beside the retail price, quietly. VAT added:
+                            MySalon stores cost without it. */}
+                        {showCost && p.cost > 0 && (
+                          <span className="tnum block text-[10.5px] font-normal text-faintink">
+                            cost {zar(costIncl(p.cost))}
+                          </span>
+                        )}
                       </span>
                     </button>
                   </li>

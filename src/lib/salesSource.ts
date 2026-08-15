@@ -59,15 +59,29 @@ export function salesBetween(from: string, to: string, playInvoices: PlayInvoice
         number: inv.id,
         date: meta.demoDate,
         client: inv.clientName,
-        lines: inv.lines.map((l) => ({
-          descr: l.descr,
-          qty: l.qty,
-          price: l.price,
-          disc: l.disc,
-          stylistId: l.stylistId ?? 0,
-          /* A voucher is a Hairline sale, so it stays out of services. */
-          kind: l.kind === "product" ? "product" : l.kind === "stock" ? "stock" : "service",
-        })),
+        lines: inv.lines.map((l) => {
+          /* Sold at cost, so nobody earned commission on it — it is the salon's
+             own stock going out, which is exactly what Stock Sales is for. The
+             money still counts; the stylist's retail figure does not move. */
+          const atCost = l.priceMode === "cost";
+          return {
+            descr: l.descr,
+            qty: l.qty,
+            price: l.price,
+            disc: l.disc,
+            stylistId: atCost ? 0 : (l.stylistId ?? 0),
+            /* A voucher is a Hairline sale, so it stays out of services. */
+            kind: atCost
+              ? ("stock" as const)
+              : l.kind === "product"
+                ? ("product" as const)
+                : l.kind === "stock"
+                  ? ("stock" as const)
+                  : ("service" as const),
+            /* An exact amount typed at the counter reports as typed. */
+            value: l.finalValue ?? undefined,
+          };
+        }),
       });
     }
   }

@@ -4,6 +4,7 @@ import {
   emptySplit,
   exVat,
   itemTracking,
+  lineValue,
   itemTrackingTotals,
   SALON_ID,
   SALON_NAME,
@@ -123,6 +124,28 @@ describe("staff turnover, one row per staff member", () => {
 
   it("sorts biggest earner first", () => {
     expect(staffTurnover(SALES, [1, 2]).map((r) => r.stylistId)).toEqual([1, 2]);
+  });
+});
+
+describe("a final value typed at the counter", () => {
+  it("reports the exact amount, not price times quantity", () => {
+    /* HF-02: a fixed amount. R500 for three items is R500. */
+    expect(lineValue({ descr: "Shampoo", qty: 3, price: 225, disc: 0, stylistId: 1, kind: "product", value: 500 })).toBe(500);
+  });
+
+  it("ignores any percentage discount once an exact amount is set", () => {
+    expect(lineValue({ descr: "Shampoo", qty: 1, price: 225, disc: 50, stylistId: 1, kind: "product", value: 200 })).toBe(200);
+  });
+
+  it("falls back to the usual maths when no amount was typed", () => {
+    expect(lineValue({ descr: "Cut", qty: 2, price: 300, disc: 10, stylistId: 1, kind: "service" })).toBe(540);
+  });
+
+  it("splits an exact amount to the right column", () => {
+    const split = splitTotals([
+      { descr: "Shampoo", qty: 3, price: 225, disc: 0, stylistId: 1, kind: "product", value: 500 },
+    ]);
+    expect(split).toMatchObject({ retail: 500, services: 0, total: 500 });
   });
 });
 

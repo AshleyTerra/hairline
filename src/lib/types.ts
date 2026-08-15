@@ -206,6 +206,27 @@ export interface Payment {
    * client's balance untouched.
    */
   voucherNumber?: number;
+  /**
+   * Who did the work a voucher is paying for. Kept on the payment so the credit
+   * survives a docket parked half-finished, and applied when the sale completes.
+   */
+  voucherStylistId?: number | null;
+}
+
+/** Why a line is not being charged at its list price. */
+export type PriceMode = "cost" | "final";
+
+/** Kept whenever a price is changed at the counter, so the change is answerable. */
+export interface PriceOverride {
+  /** The signed-in user who made the change. */
+  by: string;
+  /** When, as an ISO timestamp on the trading day. */
+  at: string;
+  /** The list price before the change. */
+  from: number;
+  /** What is being charged instead. */
+  to: number;
+  mode: PriceMode;
 }
 
 export interface TillLine {
@@ -218,6 +239,19 @@ export interface TillLine {
   /** "stock" is a Hairline sale — a voucher, say — with no stylist behind it. */
   kind: "service" | "product" | "stock";
   mins?: number;
+  /** Cost price excluding VAT, as MySalon stores it. Retail and stock only. */
+  cost?: number;
+  /** The unit price as listed when the line was added, kept through an override. */
+  listPrice?: number;
+  /**
+   * An exact amount for the whole line, typed at the counter. Held separately
+   * from `price` so the figure asked for is the figure charged, whatever the
+   * quantity — a fixed amount, not a percentage off.
+   */
+  finalValue?: number;
+  /** Absent when the line is being charged at its list price. */
+  priceMode?: PriceMode;
+  override?: PriceOverride;
   /**
    * Set on a voucher line. The voucher itself is issued when the sale completes,
    * so a docket parked half-finished keeps everything needed to issue it later.

@@ -1,4 +1,10 @@
-import type { Payment, TillLine, TillState, TillTotals } from "./types";
+import type {
+  Payment,
+  PriceOverride,
+  TillLine,
+  TillState,
+  TillTotals,
+} from "./types";
 
 /** South African VAT, charged inclusive of the displayed price. */
 export const VAT_RATE = 0.15;
@@ -33,8 +39,14 @@ export type TillAction =
   | { type: "load"; state: TillState }
   | { type: "clear" };
 
-/** Cents charged for a single line, after quantity and percentage discount. */
+/**
+ * Cents charged for a single line, after quantity and percentage discount — or
+ * exactly the amount typed at the counter, when there is one. A final value is
+ * taken as read: it is the whole point of it that R500 for three items is R500,
+ * not three times a rounded unit price.
+ */
 function lineCents(line: TillLine): number {
+  if (line.finalValue != null) return toCents(line.finalValue);
   const gross = toCents(line.price) * (line.qty ?? 1);
   const discounted = gross * (1 - (line.disc ?? 0) / 100);
   return Math.round(discounted);
@@ -146,6 +158,82 @@ export function tillReduce(state: TillState, action: TillAction): TillState {
     default:
       return state;
   }
+}
+
+// ------------------------------------------------------- price overrides
+
+/**
+ * Cost price as the salon actually pays it.
+ *
+ * MySalon stores cost excluding VAT — its own manual is explicit about it — but
+ * the figure reception needs to see is the one on the invoice from the supplier,
+ * which includes VAT. Retail prices are already VAT-inclusive, so this puts the
+ * two on the same footing.
+ */
+export function costIncl(costExVat: number): number {
+  return toRands(Math.round(toCents(costExVat ?? 0) * (1 + VAT_RATE)));
+}
+
+const stampOverride = (
+  line: TillLine,
+  to: number,
+  mode: "cost" | "final",
+  by: string,
+  at: string
+): PriceOverride => ({ by, at, from: line.listPrice ?? line.price, to, mode });
+
+/**
+ * Sells a line at cost — a staff purchase, or a product handed over at what it
+ * owed. Refused when the item has no cost on file, because charging zero by
+ * accident is far worse than declining.
+ */
+export function applyCostPrice(line: TillLine, by: string, at: string): TillLine {
+  if (line.cost == null || line.cost <= 0) return line;
+  const price = costIncl(line.cost);
+  return {
+    ...line,
+    listPrice: line.listPrice ?? line.price,
+    price,
+    finalValue: undefined,
+    priceMode: "cost",
+    override: stampOverride(line, price, "cost", by, at),
+  };
+}
+
+/**
+ * Charges an exact amount for the line. A fixed figure rather than a percentage,
+ * so any discount already on the line is cleared — the two together would make
+ * the number on the screen a guess.
+ */
+export function applyFinalValue(
+  line: TillLine,
+  finalValue: number,
+  by: string,
+  at: string
+): TillLine {
+  if (!Number.isFinite(finalValue) || finalValue < 0) return line;
+  const value = toRands(toCents(finalValue));
+  return {
+    ...line,
+    listPrice: line.listPrice ?? line.price,
+    disc: 0,
+    finalValue: value,
+    priceMode: "final",
+    override: stampOverride(line, value, "final", by, at),
+  };
+}
+
+/** Puts a line back to the price on the menu, and forgets the override. */
+export function restoreListPrice(line: TillLine): TillLine {
+  const price = line.listPrice ?? line.price;
+  return {
+    ...line,
+    price,
+    listPrice: undefined,
+    finalValue: undefined,
+    priceMode: undefined,
+    override: undefined,
+  };
 }
 
 /** Seconds elapsed since the sale was started — the "under 30 seconds" clock. */

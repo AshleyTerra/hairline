@@ -3,7 +3,13 @@ import {
   DEFAULT_PERMISSIONS,
   SCREENS,
   SCREEN_KEYS,
+  ABILITY_KEYS,
+  canDo,
+  DEFAULT_ABILITIES,
+  reconcileAbilities,
   reconcilePermissions,
+  toggleAbility,
+  type Abilities,
   addUser,
   canAccess,
   defaultUsers,
@@ -279,5 +285,64 @@ describe("checking a MySalon backup file", () => {
 
   it("rejects an empty file", () => {
     expect(describeBackup(new Uint8Array(0), "empty.bak", 0).valid).toBe(false);
+  });
+});
+
+describe("abilities — what a role may do, not just open", () => {
+  it("gives the owner everything", () => {
+    for (const a of ABILITY_KEYS) {
+      expect(canDo(DEFAULT_ABILITIES, "owner", a)).toBe(true);
+    }
+  });
+
+  it("lets reception price a line, because they work the counter", () => {
+    expect(canDo(DEFAULT_ABILITIES, "reception", "costPrice")).toBe(true);
+    expect(canDo(DEFAULT_ABILITIES, "reception", "priceOverride")).toBe(true);
+  });
+
+  it("withholds both from stylists", () => {
+    expect(canDo(DEFAULT_ABILITIES, "stylist", "costPrice")).toBe(false);
+    expect(canDo(DEFAULT_ABILITIES, "stylist", "priceOverride")).toBe(false);
+  });
+
+  it("says no to an ability nobody defined", () => {
+    expect(canDo(DEFAULT_ABILITIES, "owner", "launchTheMissiles")).toBe(false);
+  });
+
+  it("toggles one ability without disturbing the others", () => {
+    const next = toggleAbility(DEFAULT_ABILITIES, "reception", "costPrice");
+    expect(canDo(next, "reception", "costPrice")).toBe(false);
+    expect(canDo(next, "reception", "priceOverride")).toBe(true);
+    expect(canDo(next, "owner", "costPrice")).toBe(true);
+  });
+
+  it("toggles back", () => {
+    const off = toggleAbility(DEFAULT_ABILITIES, "reception", "costPrice");
+    expect(canDo(toggleAbility(off, "reception", "costPrice"), "reception", "costPrice")).toBe(true);
+  });
+
+  it("never mutates what it was given", () => {
+    const before = JSON.stringify(DEFAULT_ABILITIES);
+    toggleAbility(DEFAULT_ABILITIES, "owner", "costPrice");
+    expect(JSON.stringify(DEFAULT_ABILITIES)).toBe(before);
+  });
+
+  it("grants an ability added since the browser last saved, following the defaults", () => {
+    const stored: Abilities = { owner: [], reception: [], stylist: [] };
+    const { abilities, added } = reconcileAbilities(stored, []);
+    expect(added).toEqual([...ABILITY_KEYS]);
+    expect(canDo(abilities, "owner", "costPrice")).toBe(true);
+    expect(canDo(abilities, "stylist", "costPrice")).toBe(false);
+  });
+
+  it("leaves a deliberate choice alone once the ability is known", () => {
+    const stored: Abilities = { owner: ["costPrice"], reception: [], stylist: [] };
+    const { abilities } = reconcileAbilities(stored, [...ABILITY_KEYS]);
+    expect(canDo(abilities, "owner", "priceOverride")).toBe(false);
+    expect(canDo(abilities, "reception", "costPrice")).toBe(false);
+  });
+
+  it("reports nothing added when everything is already known", () => {
+    expect(reconcileAbilities(DEFAULT_ABILITIES, ABILITY_KEYS).added).toEqual([]);
   });
 });

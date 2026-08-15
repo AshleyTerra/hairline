@@ -14,12 +14,23 @@ import { RedeemVoucherDialog } from "@/components/till/RedeemVoucherDialog";
 import { closeDocket, findDocket, nextNumber, openDocket, saveDocket } from "@/lib/dockets";
 import { PaymentPanel } from "@/components/till/PaymentPanel";
 import { GlobalSearch } from "@/components/till/GlobalSearch";
-import { demoday, getClient, getStaff, meta, staff } from "@/lib/data";
+import { demoday, getClient, getStaff, meta, products, staff } from "@/lib/data";
 import { initials, longDate, zar, zar0 } from "@/lib/format";
 import { demoNow, demoToday } from "@/lib/clock";
 import { creditable, roster } from "@/lib/roster";
 import { useStore } from "@/lib/store";
-import { elapsedSeconds, emptyTill, tillReduce, totals as computeTotals } from "@/lib/till";
+import { canDo } from "@/lib/admin";
+import { stockBook } from "@/lib/stockBook";
+import {
+  applyCostPrice,
+  applyFinalValue,
+  costIncl,
+  elapsedSeconds,
+  emptyTill,
+  restoreListPrice,
+  tillReduce,
+  totals as computeTotals,
+} from "@/lib/till";
 import {
   checkRedemption,
   issueVoucher,
@@ -57,8 +68,21 @@ function TillCounter() {
     vouchers,
     addVouchers,
     saveVoucher,
+    role,
+    user,
+    abilities,
+    newStock,
+    stockEdits,
+    archivedStock,
   } = useStore();
   const params = useSearchParams();
+
+  /* Changing a price is a separate decision from being allowed to work the
+     till, so it is an ability rather than a screen permission. */
+  const mayCostPrice = canDo(abilities, role, "costPrice");
+  const mayOverride = canDo(abilities, role, "priceOverride");
+  /** Whoever the override is recorded against. */
+  const overrideBy = user?.displayName ?? user?.username ?? role;
 
   /* Read once, as the screen opens — later renders must not reopen it. */
   const arriving = useMemo(() => {
@@ -131,6 +155,13 @@ function TillCounter() {
    */
   const staffForPicker = useMemo(() => creditable(roster(staffRecords, staff)), [staffRecords]);
 
+  /* Retail as the salon maintains it: a barcode corrected on the Stock screen
+     is the barcode this till scans, and a line added there is sellable here. */
+  const tillItems = useMemo(
+    () => stockBook(products.till, newStock, stockEdits, archivedStock, "retail"),
+    [newStock, stockEdits, archivedStock]
+  );
+
   /** The client's usual stylist if they are still working, else the first on. */
   const defaultStylist = useMemo(() => {
     const client = getClient(till.clientId);
@@ -167,6 +198,9 @@ function TillCounter() {
         disc: 0,
         stylistId: defaultStylist,
         kind: "product",
+        /* Carried so the line can be sold at cost without another lookup.
+           MySalon stores this excluding VAT; costIncl() adds it back. */
+        cost: product.cost,
       },
     });
   }
@@ -301,7 +335,7 @@ function TillCounter() {
    * Takes a voucher as payment. It is a promise against the docket until the sale
    * completes, checked against anything already taken off the same voucher here.
    */
-  function takeVoucher(voucher: Voucher, value: number) {
+  function takeVoucher(voucher: Voucher, value: number, stylistId: number | null) {
     const pending = till.payments
       .filter((p) => p.voucherNumber === voucher.number)
       .reduce((sum, p) => sum + p.amount, 0);
@@ -312,7 +346,12 @@ function TillCounter() {
       return;
     }
 
-    const payment: Payment = { method: "voucher", amount: value, voucherNumber: voucher.number };
+    const payment: Payment = {
+      method: "voucher",
+      amount: value,
+      voucherNumber: voucher.number,
+      voucherStylistId: stylistId,
+    };
     const next = tillReduce(till, { type: "pay", payment });
     dispatch({ type: "pay", payment });
     setRedeeming(false);
@@ -353,7 +392,16 @@ function TillCounter() {
       if (payment.voucherNumber == null) continue;
       const held = vouchers.find((v) => v.number === payment.voucherNumber);
       if (!held) continue;
-      const drawn = redeemVoucher(held, payment.amount, demoToday(), number);
+      /* The stylist keeps the service value in their own figures; the cash was
+         banked when the voucher was sold, so business turnover must not take
+         it twice. The report reconciles the two. */
+      const drawn = redeemVoucher(
+        held,
+        payment.amount,
+        demoToday(),
+        number,
+        payment.voucherStylistId ?? null
+      );
       if (drawn.ok) saveVoucher(drawn.voucher);
     }
     setSlip({
@@ -411,6 +459,7 @@ function TillCounter() {
           onPickService={addService}
           onPickProduct={addProduct}
           onQueryChange={setQuery}
+          items={tillItems}
         />
 
         <div className="ml-auto text-right">
@@ -487,6 +536,8 @@ function TillCounter() {
             onAddProduct={addProduct}
             query={query}
             openDockets={dockets.length}
+            showCost={mayCostPrice}
+            items={tillItems}
             clientsTab={
               <DayBook
                 dockets={dockets}
@@ -556,11 +607,27 @@ function TillCounter() {
                               : (stylist?.name ?? "No stylist")}{" "}
                             · Qty {line.qty}
                             {line.disc > 0 ? ` · ${line.disc}% off` : ""}
+                            {line.priceMode === "cost" ? " · at cost" : ""}
+                            {line.priceMode === "final" ? " · priced by hand" : ""}
+                            {/* The cost price sits beside the retail one, quietly,
+                                for whoever is allowed to see it. */}
+                            {mayCostPrice && line.cost != null && line.cost > 0 && (
+                              <span className="text-faintink"> · cost {zar(costIncl(line.cost))}</span>
+                            )}
                           </button>
                         </div>
 
-                        <span className="tnum shrink-0 text-[15px] font-semibold text-ink">
-                          {zar(line.price * line.qty * (1 - line.disc / 100))}
+                        <span className="shrink-0 text-right">
+                          <span className="tnum block text-[15px] font-semibold text-ink">
+                            {zar(
+                              line.finalValue ?? line.price * line.qty * (1 - line.disc / 100)
+                            )}
+                          </span>
+                          {line.override && (
+                            <span className="tnum block text-[10.5px] text-faintink line-through">
+                              {zar(line.override.from * line.qty)}
+                            </span>
+                          )}
                         </span>
 
                         <button
@@ -643,6 +710,83 @@ function TillCounter() {
                           >
                             Done
                           </button>
+
+                          {/* Pricing controls, for whoever is allowed them */}
+                          {(mayCostPrice || mayOverride) && (
+                            <div className="flex w-full flex-wrap items-center gap-2 border-t border-edge-faint pt-2">
+                              {mayCostPrice && line.cost != null && line.cost > 0 && (
+                                <span className="flex items-center gap-1">
+                                  {(["list", "cost"] as const).map((mode) => {
+                                    const on =
+                                      mode === "cost"
+                                        ? line.priceMode === "cost"
+                                        : line.priceMode == null;
+                                    return (
+                                      <button
+                                        key={mode}
+                                        type="button"
+                                        aria-pressed={on}
+                                        onClick={() =>
+                                          dispatch({
+                                            type: "update",
+                                            key: line.key,
+                                            patch:
+                                              mode === "cost"
+                                                ? applyCostPrice(line, overrideBy, demoNow())
+                                                : restoreListPrice(line),
+                                          })
+                                        }
+                                        className={`rounded px-2 py-1 text-[11px] font-semibold transition-colors ${
+                                          on
+                                            ? "bg-taupe text-white"
+                                            : "bg-white text-taupe-deep hover:bg-chip"
+                                        }`}
+                                      >
+                                        {mode === "cost" ? "Cost price" : "Full price"}
+                                      </button>
+                                    );
+                                  })}
+                                </span>
+                              )}
+
+                              {mayOverride && (
+                                <label className="flex items-center gap-1.5 text-[11.5px] text-taupe-deep">
+                                  Final value
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={line.finalValue ?? ""}
+                                    placeholder="exact"
+                                    onChange={(e) => {
+                                      const raw = e.target.value;
+                                      dispatch({
+                                        type: "update",
+                                        key: line.key,
+                                        patch:
+                                          raw === ""
+                                            ? restoreListPrice(line)
+                                            : applyFinalValue(
+                                                line,
+                                                Number(raw),
+                                                overrideBy,
+                                                demoNow()
+                                              ),
+                                      });
+                                    }}
+                                    aria-label={`Final value for ${line.descr}`}
+                                    className="tnum w-20 rounded border border-edge bg-white px-1.5 py-1 text-[11.5px] text-ink"
+                                  />
+                                </label>
+                              )}
+
+                              {line.override && (
+                                <span className="text-[10.5px] text-faintink">
+                                  was {zar(line.override.from)} · {line.override.by}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
                     </li>
@@ -784,6 +928,12 @@ function TillCounter() {
           owing={totals.balance}
           today={demoToday()}
           error={voucherError}
+          stylists={staffForPicker.map((m) => ({ id: m.id, name: m.name }))}
+          /* Whoever is already doing the work on this sale. */
+          defaultStylistId={
+            till.lines.find((l) => l.kind === "service" && l.stylistId != null)?.stylistId ??
+            defaultStylist
+          }
           onRedeem={takeVoucher}
           onClose={() => {
             setRedeeming(false);

@@ -9,13 +9,17 @@ import type { BookedAppointment } from "./diary";
 import type { Voucher } from "./vouchers";
 import { DEFAULT_DESIGNATIONS, type StaffRecord } from "./staffAdmin";
 import type { StockDraft } from "./stockAdmin";
+import type { StockEdit } from "./stockBook";
 import staffData from "@/data/staff.json";
 import type { NewClient } from "./types";
 import {
+  DEFAULT_ABILITIES,
   DEFAULT_PERMISSIONS,
+  reconcileAbilities,
   reconcilePermissions,
   defaultUsers,
   type ImportedClient,
+  type Abilities,
   type ManagedUser,
   type Permissions,
 } from "./admin";
@@ -26,6 +30,9 @@ const STYLIST_KEY = "hairline-demo-stylist";
 const USER_KEY = "hairline-demo-user";
 const USERS_KEY = "hairline-demo-users";
 const PERMS_KEY = "hairline-demo-permissions";
+const ABILITIES_KEY = "hairline-demo-abilities";
+/** Which abilities existed when they were last saved. */
+const ABILITYKEYS_KEY = "hairline-demo-ability-keys";
 const IMPORTED_KEY = "hairline-demo-imported-clients";
 const DOCKETS_KEY = "hairline-demo-dockets";
 /** Which screens existed when the permissions were last saved. */
@@ -34,6 +41,7 @@ const STAFFREC_KEY = "hairline-demo-staff-records";
 const DESIGNATIONS_KEY = "hairline-demo-designations";
 const ARCHIVED_KEY = "hairline-demo-archived-stock";
 const NEWSTOCK_KEY = "hairline-demo-new-stock";
+const STOCKEDITS_KEY = "hairline-demo-stock-edits";
 const NEWCLIENTS_KEY = "hairline-demo-new-clients";
 const APPOINTMENTS_KEY = "hairline-demo-appointments";
 const VOUCHERS_KEY = "hairline-demo-vouchers";
@@ -45,6 +53,8 @@ interface DemoState {
   invoices: PlayInvoice[];
   users: ManagedUser[];
   permissions: Permissions;
+  /** What each role may do once inside a screen. */
+  abilities: Abilities;
   importedClients: ImportedClient[];
   /** Sales in progress, one per client at the counter. */
   dockets: Docket[];
@@ -61,6 +71,8 @@ interface DemoState {
   archivedStock: number[];
   /** Stock lines added or imported during the demo. */
   newStock: StockDraft[];
+  /** Corrections made on the Stock screen — brand, barcode, cost, price. */
+  stockEdits: StockEdit[];
   /** False until the client has read localStorage, so the shell can hold back. */
   hydrated: boolean;
 }
@@ -72,6 +84,7 @@ const SERVER_STATE: DemoState = {
   invoices: [],
   users: defaultUsers(),
   permissions: DEFAULT_PERMISSIONS,
+  abilities: DEFAULT_ABILITIES,
   importedClients: [],
   dockets: [],
   newClients: [],
@@ -81,6 +94,7 @@ const SERVER_STATE: DemoState = {
   designations: [...DEFAULT_DESIGNATIONS],
   archivedStock: [],
   newStock: [],
+  stockEdits: [],
   hydrated: false,
 };
 
@@ -125,6 +139,7 @@ class DemoStore {
         invoices: read<PlayInvoice[]>(INVOICE_KEY, []),
         users: read<ManagedUser[]>(USERS_KEY, defaultUsers()),
         permissions: read<Permissions>(PERMS_KEY, DEFAULT_PERMISSIONS),
+        abilities: read<Abilities>(ABILITIES_KEY, DEFAULT_ABILITIES),
         importedClients: read<ImportedClient[]>(IMPORTED_KEY, []),
         dockets: read<Docket[]>(DOCKETS_KEY, []),
         newClients: read<NewClient[]>(NEWCLIENTS_KEY, []),
@@ -134,6 +149,7 @@ class DemoStore {
         designations: read<string[]>(DESIGNATIONS_KEY, [...DEFAULT_DESIGNATIONS]),
         archivedStock: read<number[]>(ARCHIVED_KEY, []),
         newStock: read<StockDraft[]>(NEWSTOCK_KEY, []),
+        stockEdits: read<StockEdit[]>(STOCKEDITS_KEY, []),
         hydrated: true,
       };
 
@@ -148,6 +164,17 @@ class DemoStore {
         write(PERMS_KEY, reconciled.permissions);
       }
       write(SCREENKEYS_KEY, reconciled.knownKeys);
+
+      // Same for abilities, which arrived later than the screens did.
+      const reconciledAbilities = reconcileAbilities(
+        this.state.abilities,
+        read<string[]>(ABILITYKEYS_KEY, [])
+      );
+      if (reconciledAbilities.added.length > 0) {
+        this.state = { ...this.state, abilities: reconciledAbilities.abilities };
+        write(ABILITIES_KEY, reconciledAbilities.abilities);
+      }
+      write(ABILITYKEYS_KEY, reconciledAbilities.knownKeys);
     }
     return this.state;
   };
@@ -291,6 +318,11 @@ class DemoStore {
     this.set({ newStock: [] });
   }
 
+  setStockEdits(stockEdits: StockEdit[]) {
+    write(STOCKEDITS_KEY, stockEdits);
+    this.set({ stockEdits });
+  }
+
   setUsers(users: ManagedUser[]) {
     write(USERS_KEY, users);
     this.set({ users });
@@ -299,6 +331,11 @@ class DemoStore {
   setPermissions(permissions: Permissions) {
     write(PERMS_KEY, permissions);
     this.set({ permissions });
+  }
+
+  setAbilities(abilities: Abilities) {
+    write(ABILITIES_KEY, abilities);
+    this.set({ abilities });
   }
 
   addImportedClients(clients: ImportedClient[]) {
@@ -317,6 +354,7 @@ class DemoStore {
     write(INVOICE_KEY, []);
     write(USERS_KEY, defaultUsers());
     write(PERMS_KEY, DEFAULT_PERMISSIONS);
+    write(ABILITIES_KEY, DEFAULT_ABILITIES);
     write(IMPORTED_KEY, []);
     write(DOCKETS_KEY, []);
     write(NEWCLIENTS_KEY, []);
@@ -326,10 +364,12 @@ class DemoStore {
     write(DESIGNATIONS_KEY, [...DEFAULT_DESIGNATIONS]);
     write(ARCHIVED_KEY, []);
     write(NEWSTOCK_KEY, []);
+    write(STOCKEDITS_KEY, []);
     this.set({
       invoices: [],
       users: defaultUsers(),
       permissions: DEFAULT_PERMISSIONS,
+      abilities: DEFAULT_ABILITIES,
       importedClients: [],
       dockets: [],
       newClients: [],
@@ -339,6 +379,7 @@ class DemoStore {
       designations: [...DEFAULT_DESIGNATIONS],
       archivedStock: [],
       newStock: [],
+      stockEdits: [],
     });
   }
 }
@@ -395,6 +436,7 @@ export function useStore() {
   const signOut = useCallback(() => store.signOut(), []);
   const setUsers = useCallback((users: ManagedUser[]) => store.setUsers(users), []);
   const setPermissions = useCallback((p: Permissions) => store.setPermissions(p), []);
+  const setAbilities = useCallback((a: Abilities) => store.setAbilities(a), []);
   const addImportedClients = useCallback(
     (clients: ImportedClient[]) => store.addImportedClients(clients),
     []
@@ -406,6 +448,7 @@ export function useStore() {
   const setArchivedStock = useCallback((ids: number[]) => store.setArchivedStock(ids), []);
   const addStock = useCallback((lines: StockDraft[]) => store.addStock(lines), []);
   const clearNewStock = useCallback(() => store.clearNewStock(), []);
+  const setStockEdits = useCallback((e: StockEdit[]) => store.setStockEdits(e), []);
   const setDockets = useCallback((d: Docket[]) => store.setDockets(d), []);
   const addClient = useCallback(
     (input: Omit<NewClient, "id">) => store.addClient(input),
@@ -428,6 +471,7 @@ export function useStore() {
       invoices: state.invoices,
       users: state.users,
       permissions: state.permissions,
+      abilities: state.abilities,
       importedClients: state.importedClients,
       dockets: state.dockets,
       newClients: state.newClients,
@@ -437,6 +481,7 @@ export function useStore() {
       designations: state.designations,
       archivedStock: state.archivedStock,
       newStock: state.newStock,
+      stockEdits: state.stockEdits,
       hydrated: state.hydrated,
       signIn,
       signOut,
@@ -446,6 +491,7 @@ export function useStore() {
       clearInvoices,
       setUsers,
       setPermissions,
+      setAbilities,
       addImportedClients,
       clearImportedClients,
       resetDemo,
@@ -461,8 +507,9 @@ export function useStore() {
       setArchivedStock,
       addStock,
       clearNewStock,
+      setStockEdits,
     }),
     [state, signIn, signOut, setRole, setStylistId, addInvoice, clearInvoices, setUsers,
-     setPermissions, addImportedClients, clearImportedClients, resetDemo, setDockets, addClient, addAppointment, cancelAppointment, updateAppointment, addVouchers, saveVoucher, setStaffRecords, setDesignations, setArchivedStock, addStock, clearNewStock]
+     setPermissions, setAbilities, addImportedClients, clearImportedClients, resetDemo, setDockets, addClient, addAppointment, cancelAppointment, updateAppointment, addVouchers, saveVoucher, setStaffRecords, setDesignations, setArchivedStock, addStock, clearNewStock, setStockEdits]
   );
 }
