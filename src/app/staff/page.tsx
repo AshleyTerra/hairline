@@ -13,7 +13,7 @@ import { initials, pct, zar0 } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
 export default function StaffPage() {
-  const { role, invoices, staffRecords } = useStore();
+  const { role, invoices, staffRecords, amendedSales } = useStore();
   const canSeeMoney = role === "owner";
 
   /**
@@ -36,10 +36,10 @@ export default function StaffPage() {
   const useAggregate = period.period.grain === "twelve";
   const periodRevenue = useMemo(() => {
     if (useAggregate) return null;
-    const sales = salesBetween(from, to, invoices);
+    const sales = salesBetween(from, to, invoices, amendedSales);
     const rows = staffTurnover(sales, team.map((m) => m.id));
     return new Map(rows.map((r) => [r.stylistId, r.inclVat.total]));
-  }, [useAggregate, from, to, invoices, team]);
+  }, [useAggregate, from, to, invoices, amendedSales, team]);
 
   const revenueOf = (id: number, fallback: number) =>
     periodRevenue ? (periodRevenue.get(id) ?? 0) : fallback;
@@ -63,7 +63,7 @@ export default function StaffPage() {
    */
   const salesCount = useAggregate
     ? team.reduce((sum, m) => sum + m.stats.invoices, 0)
-    : salesBetween(from, to, invoices).length;
+    : salesBetween(from, to, invoices, amendedSales).length;
 
   return (
     <>

@@ -25,6 +25,7 @@ import {
 } from "./admin";
 
 const INVOICE_KEY = "hairline-demo-invoices";
+const AMENDED_KEY = "hairline-demo-amended-sales";
 const ROLE_KEY = "hairline-demo-role";
 const STYLIST_KEY = "hairline-demo-stylist";
 const USER_KEY = "hairline-demo-user";
@@ -51,6 +52,12 @@ interface DemoState {
   role: Role;
   stylistId: number;
   invoices: PlayInvoice[];
+  /**
+   * Corrections to sales that were already in the day book. Held apart from
+   * `invoices` because the migrated day is static data; the correction is a
+   * whole corrected copy, swapped in wherever the sale appears.
+   */
+  amendedSales: PlayInvoice[];
   users: ManagedUser[];
   permissions: Permissions;
   /** What each role may do once inside a screen. */
@@ -82,6 +89,7 @@ const SERVER_STATE: DemoState = {
   role: "owner",
   stylistId: 0,
   invoices: [],
+  amendedSales: [],
   users: defaultUsers(),
   permissions: DEFAULT_PERMISSIONS,
   abilities: DEFAULT_ABILITIES,
@@ -137,6 +145,7 @@ class DemoStore {
         role: user?.role ?? read<Role>(ROLE_KEY, SERVER_STATE.role),
         stylistId: user?.staffId ?? read<number>(STYLIST_KEY, SERVER_STATE.stylistId),
         invoices: read<PlayInvoice[]>(INVOICE_KEY, []),
+        amendedSales: read<PlayInvoice[]>(AMENDED_KEY, []),
         users: read<ManagedUser[]>(USERS_KEY, defaultUsers()),
         permissions: read<Permissions>(PERMS_KEY, DEFAULT_PERMISSIONS),
         abilities: read<Abilities>(ABILITIES_KEY, DEFAULT_ABILITIES),
@@ -240,6 +249,17 @@ class DemoStore {
     const invoices = this.getSnapshot().invoices.map((i) => (i.id === invoice.id ? invoice : i));
     write(INVOICE_KEY, invoices);
     this.set({ invoices });
+  }
+
+  /**
+   * Records a correction to a sale that was already in the day book. Replaces
+   * any earlier correction to the same invoice, so the latest version stands.
+   */
+  saveAmendedSale(invoice: PlayInvoice) {
+    const others = this.getSnapshot().amendedSales.filter((i) => i.id !== invoice.id);
+    const amendedSales = [...others, invoice];
+    write(AMENDED_KEY, amendedSales);
+    this.set({ amendedSales });
   }
 
   /**
@@ -371,6 +391,7 @@ class DemoStore {
   /** Returns the demo to the state a first-time visitor sees. */
   resetDemo() {
     write(INVOICE_KEY, []);
+    write(AMENDED_KEY, []);
     write(USERS_KEY, defaultUsers());
     write(PERMS_KEY, DEFAULT_PERMISSIONS);
     write(ABILITIES_KEY, DEFAULT_ABILITIES);
@@ -386,6 +407,7 @@ class DemoStore {
     write(STOCKEDITS_KEY, []);
     this.set({
       invoices: [],
+      amendedSales: [],
       users: defaultUsers(),
       permissions: DEFAULT_PERMISSIONS,
       abilities: DEFAULT_ABILITIES,
@@ -449,6 +471,7 @@ export function useStore() {
   );
   const clearInvoices = useCallback(() => store.clearInvoices(), []);
   const updateInvoice = useCallback((i: PlayInvoice) => store.updateInvoice(i), []);
+  const saveAmendedSale = useCallback((i: PlayInvoice) => store.saveAmendedSale(i), []);
   const confirmPassword = useCallback((p: string) => store.confirmPassword(p), []);
   const signIn = useCallback(
     (username: string, password: string) => store.signIn(username, password),
@@ -490,6 +513,7 @@ export function useStore() {
       role: state.role,
       stylistId: state.stylistId,
       invoices: state.invoices,
+      amendedSales: state.amendedSales,
       users: state.users,
       permissions: state.permissions,
       abilities: state.abilities,
@@ -511,6 +535,7 @@ export function useStore() {
       addInvoice,
       clearInvoices,
       updateInvoice,
+      saveAmendedSale,
       confirmPassword,
       setUsers,
       setPermissions,
@@ -532,7 +557,7 @@ export function useStore() {
       clearNewStock,
       setStockEdits,
     }),
-    [state, signIn, signOut, setRole, setStylistId, addInvoice, clearInvoices, updateInvoice, confirmPassword, setUsers,
+    [state, signIn, signOut, setRole, setStylistId, addInvoice, clearInvoices, updateInvoice, saveAmendedSale, confirmPassword, setUsers,
      setPermissions, setAbilities, addImportedClients, clearImportedClients, resetDemo, setDockets, addClient, addAppointment, cancelAppointment, updateAppointment, addVouchers, saveVoucher, setStaffRecords, setDesignations, setArchivedStock, addStock, clearNewStock, setStockEdits]
   );
 }

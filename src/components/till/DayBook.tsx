@@ -5,6 +5,7 @@ import { daybook, demoday, getStaff, meta, staff } from "@/lib/data";
 import { docketDate, docketTotal, type Docket } from "@/lib/dockets";
 import { shortDate, zar, zar0 } from "@/lib/format";
 import { useStore } from "@/lib/store";
+import { amendedOrOriginal } from "@/lib/salesBook";
 import { VAT_RATE } from "@/lib/till";
 import { InvoiceSlip, type InvoiceSlipData } from "./InvoiceSlip";
 import type { DayBookEntry, PaymentMethod, TillLine } from "@/lib/types";
@@ -69,7 +70,7 @@ export function DayBook({
   onNewDocket,
   onAmend,
 }: DayBookProps) {
-  const { invoices } = useStore();
+  const { invoices, amendedSales } = useStore();
   const [from, setFrom] = useState(meta.demoDate);
   const [to, setTo] = useState(meta.demoDate);
   const [ranged, setRanged] = useState(false);
@@ -117,7 +118,9 @@ export function DayBook({
 
     if (lo <= meta.demoDate && meta.demoDate <= hi) {
       out.push(
-        ...demoday.invoices.map((inv) => ({
+        /* The day's own sales, with any correction swapped in. These are the
+           dockets on screen, so they have to be correctable too. */
+        ...amendedOrOriginal(demoday.invoices, amendedSales).map((inv) => ({
           n: inv.id,
           d: meta.demoDate,
           t: inv.date.slice(11, 16),
@@ -125,23 +128,10 @@ export function DayBook({
           s: inv.lines[0]?.stylistId ?? 0,
           v: inv.total,
           i: inv.lines.length,
-          lines: inv.lines.map((l, i) => ({
-            key: `dd${i}`,
-            descr: l.descr,
-            price: l.price,
-            qty: l.qty,
-            disc: l.disc,
-            stylistId: l.stylistId,
-            kind: l.kind,
-          })) as TillLine[],
-          payments: (
-            Object.entries(inv.payments) as [string, number][]
-          )
-            .filter(([, amount]) => amount > 0)
-            .map(([method, amount]) => ({
-              method: (method === "toPay" ? "topay" : method) as PaymentMethod,
-              amount,
-            })),
+          lines: inv.lines,
+          payments: inv.payments,
+          amendable: inv.id,
+          amended: inv.wasAmended,
         })),
         ...invoices.map((inv) => ({
           n: inv.id,
@@ -161,7 +151,7 @@ export function DayBook({
       );
     }
     return out.sort((a, b) => (a.d + a.t).localeCompare(b.d + b.t));
-  }, [start, end, invoices]);
+  }, [start, end, invoices, amendedSales]);
 
   /** Stylists who actually appear in the chosen period, for the filter. */
   const stylistsPresent = useMemo(() => {

@@ -23,6 +23,7 @@ import { creditable, roster } from "@/lib/roster";
 import { useStore } from "@/lib/store";
 import { canDo } from "@/lib/admin";
 import { stockBook } from "@/lib/stockBook";
+import { resolveSale } from "@/lib/salesBook";
 import {
   applyCostPrice,
   applyFinalValue,
@@ -82,6 +83,8 @@ function TillCounter() {
     user,
     abilities,
     updateInvoice,
+    amendedSales,
+    saveAmendedSale,
     confirmPassword,
     newStock,
     stockEdits,
@@ -1020,8 +1023,11 @@ function TillCounter() {
       )}
 
       {amending != null && (() => {
-        const invoice = invoices.find((i) => i.id === amending);
+        /* Any closed sale can be corrected, not only one rung up in this
+           browser — the dockets on screen are mostly the day's own. */
+        const invoice = resolveSale(amending, invoices, amendedSales, demoday.invoices);
         if (!invoice) return null;
+        const rungUpHere = invoices.some((i) => i.id === amending);
         return (
           <AmendDocketDialog
             invoice={invoice}
@@ -1030,7 +1036,10 @@ function TillCounter() {
             onConfirmPassword={confirmPassword}
             onClose={() => setAmending(null)}
             onSave={(corrected) => {
-              updateInvoice(corrected);
+              /* A sale from the day book is static, so the correction is stored
+                 beside it and swapped in; one rung up here is edited in place. */
+              if (rungUpHere) updateInvoice(corrected);
+              else saveAmendedSale(corrected);
               setAmending(null);
             }}
           />

@@ -34,7 +34,7 @@ export default function StaffMemberPage({ params }: { params: Promise<{ id: stri
 }
 
 function Portfolio({ member: who }: { member: RosterMember }) {
-  const { invoices } = useStore();
+  const { invoices, amendedSales } = useStore();
   const person = who.stats;
 
   const bookings = demoday.bookings.filter((b) => b.stylistId === person.id);
@@ -48,8 +48,8 @@ function Portfolio({ member: who }: { member: RosterMember }) {
    */
   const useAggregate = grain === "twelve";
   const windowSales = useMemo(
-    () => (useAggregate ? [] : salesBetween(from, to, invoices)),
-    [useAggregate, from, to, invoices]
+    () => (useAggregate ? [] : salesBetween(from, to, invoices, amendedSales)),
+    [useAggregate, from, to, invoices, amendedSales]
   );
   const windowTurnover = useMemo(() => {
     if (useAggregate) return person.totalRevenue;

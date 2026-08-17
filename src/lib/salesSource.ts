@@ -9,7 +9,20 @@ import type { PlayInvoice } from "./types";
 
 const KINDS: ReportLine["kind"][] = ["service", "product", "stock"];
 
-export function salesBetween(from: string, to: string, playInvoices: PlayInvoice[]): ReportSale[] {
+/**
+ * Sales in a period, for the reports.
+ *
+ * `amendedSales` carries corrections to sales already in the day book — a
+ * stylist split fixed after the docket closed. The corrected version is used in
+ * place of the original, so the turnover figures follow the correction, which is
+ * the reason for making it.
+ */
+export function salesBetween(
+  from: string,
+  to: string,
+  playInvoices: PlayInvoice[],
+  amendedSales: readonly PlayInvoice[] = []
+): ReportSale[] {
   const lo = from <= to ? from : to;
   const hi = from <= to ? to : from;
   const out: ReportSale[] = [];
@@ -38,18 +51,21 @@ export function salesBetween(from: string, to: string, playInvoices: PlayInvoice
   }
 
   if (lo <= meta.demoDate && meta.demoDate <= hi) {
+    /* Any correction to a day-book sale stands in for the original. */
+    const corrected = new Map(amendedSales.map((a) => [a.id, a]));
     for (const inv of demoday.invoices) {
+      const fix = corrected.get(inv.id);
       out.push({
         number: inv.id,
         date: meta.demoDate,
-        client: inv.clientName,
-        lines: inv.lines.map((l) => ({
+        client: fix?.clientName ?? inv.clientName,
+        lines: (fix ? fix.lines : inv.lines).map((l) => ({
           descr: l.descr,
           qty: l.qty,
           price: l.price,
           disc: l.disc,
           stylistId: l.stylistId ?? 0,
-          kind: l.kind === "product" ? "product" : "service",
+          kind: l.kind === "product" ? "product" : l.kind === "stock" ? "stock" : "service",
         })),
       });
     }

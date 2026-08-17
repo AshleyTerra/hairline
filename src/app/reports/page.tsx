@@ -50,7 +50,7 @@ const RETAIL_KINDS: LineKind[] = ["product", "stock"];
 const nameFor = (id: number) => (id === SALON_ID ? SALON_NAME : (getStaff(id)?.name ?? ""));
 
 export default function ReportsPage() {
-  const { invoices, vouchers } = useStore();
+  const { invoices, vouchers, amendedSales } = useStore();
   const [state, setState] = useState<CriteriaState>({
     kind: "staffTurnover",
     from: defaultFrom,
@@ -74,8 +74,8 @@ export default function ReportsPage() {
       : null;
 
   const sales = useMemo(
-    () => (error ? [] : salesBetween(from, to, invoices)),
-    [from, to, invoices, error]
+    () => (error ? [] : salesBetween(from, to, invoices, amendedSales)),
+    [from, to, invoices, amendedSales, error]
   );
 
   const staffRows = useMemo(
