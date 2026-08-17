@@ -131,8 +131,10 @@ check("FR-009 staff multi-select with Select all",
   /Select all/i.test(picker) && /Deselect all/i.test(picker));
 await ev(`document.querySelector('button[aria-label="Staff"]')?.click(), true`);
 await sleep(400);
-check("FR-009 columns show services, retail and salon stock",
-  /services/i.test(rep) && /retail/i.test(rep) && /salon stock/i.test(rep));
+/* "Salon stock" became "Stock Sales" on 14 August, at the salon's request for
+   one familiar label everywhere. */
+check("FR-009 columns show services, retail and Stock Sales",
+  /services/i.test(rep) && /retail/i.test(rep) && /stock sales/i.test(rep));
 check("FR-009 both excl and incl VAT", /excl vat/i.test(rep) && /incl vat/i.test(rep));
 check("FR-009 period stated on the report", /to \d|August|July/.test(rep));
 check("FR-011 print button offered", /Print \/ save as PDF/.test(rep));
@@ -142,13 +144,25 @@ check("FR-009 totals row present", /Total/.test(totalRow ?? ""), (totalRow ?? ""
 await shot("p1-reports-staff");
 
 // ---- FR-008 exports actually produce files
+/* Wait for the file rather than a fixed number of seconds: a slow write made
+   this read an empty directory and report a working export as broken. A partial
+   download lands as .crdownload, so those do not count as finished. */
+const waitForFile = async (ext, tries = 20) => {
+  for (let i = 0; i < tries; i += 1) {
+    const found = existsSync(DL)
+      ? readdirSync(DL).filter((f) => f.endsWith(ext) && !f.endsWith(".crdownload"))
+      : [];
+    if (found.length > 0) return found;
+    await sleep(500);
+  }
+  return [];
+};
+
 await clickStartsWith("Excel");
-await sleep(2500);
-const xlsx = existsSync(DL) ? readdirSync(DL).filter((f) => f.endsWith(".xlsx")) : [];
+const xlsx = await waitForFile(".xlsx");
 check("FR-008 Excel workbook downloads", xlsx.length > 0, xlsx[0] ?? "none");
 await clickStartsWith("CSV");
-await sleep(1800);
-const csv = existsSync(DL) ? readdirSync(DL).filter((f) => f.endsWith(".csv")) : [];
+const csv = await waitForFile(".csv");
 check("FR-008 CSV downloads", csv.length > 0, csv[0] ?? "none");
 
 // ---- second report type

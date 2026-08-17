@@ -121,7 +121,20 @@ await shot("d3-range");
 // Back to today, then check open dockets appear in the tab.
 await clickExact("Back to today");
 await sleep(1200);
-await clickExact("+ New docket");
+/* Today's "+ New docket" was removed at the salon's request. A docket is now
+   opened by ringing something up and parking it with Save. */
+const pickTab = (name) => ev(`(() => {
+  const t = Array.from(document.querySelectorAll('button[aria-pressed]'))
+    .find(b => b.textContent.trim().toLowerCase().startsWith(${JSON.stringify(name)}));
+  if (t) { t.click(); return true; } return false;
+})()`);
+await pickTab("services");
+await sleep(1200);
+await ev(`document.querySelectorAll('[data-catalogue] li button')[0]?.click(), true`);
+await sleep(1200);
+await clickExact("Save");
+await sleep(1800);
+await pickTab("clients today");
 await sleep(1600);
 check("open dockets listed in the tab", await ev(`!!document.querySelector('[data-open-dockets] li')`));
 check("open section is labelled", await ev(`/awaiting payment/i.test(document.body.innerText)`));

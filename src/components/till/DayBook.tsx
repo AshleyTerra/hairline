@@ -297,13 +297,19 @@ export function DayBook({
         )}
 
         {/* A docket can be started for today, or prepared for a future day */}
-        {(isToday || isFuture) && (
+        {/*
+          Today's "+ New docket" was removed at the salon's request. Preparing a
+          docket for a future day stays, because that is a different job — it is
+          how tomorrow's booking is set up in advance — and reception opens
+          today's dockets from the Clients today strip instead.
+        */}
+        {isFuture && (
           <button
             type="button"
-            onClick={() => onNewDocket(isFuture ? from : undefined)}
+            onClick={() => onNewDocket(from)}
             className="ml-auto rounded-lg bg-taupe-deep px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-ink"
           >
-            {isFuture ? `+ Docket for ${shortDate(from)}` : "+ New docket"}
+            + Docket for {shortDate(from)}
           </button>
         )}
       </div>

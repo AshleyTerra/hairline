@@ -92,24 +92,30 @@ const openClientsTab = () => ev(`(() => {
   if (t) { t.click(); return true; } return false;
 })()`);
 
-check("the day's tab offers a new docket", await ev(`
+/* The salon asked for today's "+ New docket" button to go, so a docket now
+   starts by ringing something up and parking it with Save. The numbering is what
+   mattered about it, and that is unchanged. */
+check("today's tab no longer pushes a new-docket button", !(await ev(`
   Array.from(document.querySelectorAll('button')).some(b => b.textContent.trim() === '+ New docket')
-`));
+`)));
 
-await click("+ New docket");
-await sleep(1400);
-const firstNo = await ev(`document.body.innerText.match(/#(\\d+)/)?.[1]`);
-check("first docket carries on from the salon's numbering", Number(firstNo) === 93711, `#${firstNo}`);
 await openServices();
 await sleep(1200);
 await firstTile();
 await sleep(1000);
+await click("Save");
+await sleep(1800);
+const firstNo = await ev(`document.body.innerText.match(/#(\\d+)/)?.[1]`);
+check("first docket carries on from the salon's numbering", Number(firstNo) === 93711, `#${firstNo}`);
 
+/* With one docket open the strip appears, and that is where the next starts. */
 await openClientsTab();
 await sleep(900);
 await click("+ New docket");
 await sleep(1400);
 await openServices();
+await sleep(1000);
+await firstTile();
 await sleep(1000);
 const numbers = await ev(`Array.from(document.body.innerText.matchAll(/#(\\d+)/g)).map(m=>m[1])`);
 check("two dockets open with different numbers", new Set(numbers).size >= 2, numbers?.join(", "));
