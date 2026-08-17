@@ -17,6 +17,8 @@ interface ClientPickerProps {
   onAddClient?: () => void;
   /** Voids the whole sale. Only offered once there is something to void. */
   onClear?: () => void;
+  /** Opens what this client has bought before — Karin asked for it here. */
+  onHistory?: () => void;
 }
 
 /**
@@ -30,11 +32,12 @@ export function ClientPicker({
   onChange,
   onAddClient,
   onClear,
+  onHistory,
 }: ClientPickerProps) {
   /* A client captured at the counter carries a negative id, so the migrated file
      alone would not resolve them and their details would read blank. */
-  const { newClients } = useStore();
-  const book = useMemo(() => clientBook(clients, newClients), [newClients]);
+  const { newClients, invoices } = useStore();
+  const book = useMemo(() => clientBook(clients, newClients, invoices), [newClients, invoices]);
   const client = clientId != null ? findClient(book, clientId) : undefined;
 
   if (!clientName) {
@@ -112,6 +115,17 @@ export function ClientPicker({
         </div>
 
         <span className="flex shrink-0 items-center gap-3">
+          {/* Reception checks this with the client standing there, so it sits on
+              the docket rather than two screens away. */}
+          {onHistory && clientId != null && (
+            <button
+              type="button"
+              onClick={onHistory}
+              className="text-[12px] font-semibold text-taupe transition-colors hover:text-taupe-deep"
+            >
+              History
+            </button>
+          )}
           <button
             type="button"
             onClick={onChange}

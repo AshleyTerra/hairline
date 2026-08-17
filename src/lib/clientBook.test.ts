@@ -9,7 +9,7 @@ import {
   validateClient,
   type ClientInput,
 } from "./clientBook";
-import type { Client, NewClient } from "./types";
+import type { Client, NewClient, PlayInvoice } from "./types";
 
 const input = (over: Partial<ClientInput> = {}): ClientInput => ({
   name: "Thandi Nkosi",
@@ -263,5 +263,107 @@ describe("reading a birthday", () => {
   it("copes with nothing on file", () => {
     expect(birthdayOf(null)).toBeNull();
     expect(birthdayOf("")).toBeNull();
+  });
+});
+
+// ------------- a sale rung up here must show on the client's own record
+
+const playInvoice = (over: Partial<PlayInvoice> = {}): PlayInvoice => ({
+  id: 1,
+  clientId: -1,
+  clientName: "Thandi Nkosi",
+  date: "2026-07-25T10:15:00",
+  total: 600,
+  lines: [
+    { key: "l1", descr: "Cut - ladies", price: 600, qty: 1, disc: 0, stylistId: 4, kind: "service" },
+  ],
+  payments: [{ method: "card", amount: 600 }],
+  tips: [],
+  seconds: 24,
+  ...over,
+});
+
+describe("what a sale does to the client's record", () => {
+  it("counts the visit", () => {
+    const book = clientBook([migrated()], [added()], [playInvoice()]);
+    expect(findClient(book, -1)?.visitCount).toBe(1);
+  });
+
+  it("adds it to their lifetime spend", () => {
+    const book = clientBook([migrated()], [added()], [playInvoice()]);
+    expect(findClient(book, -1)?.lifetimeSpend).toBe(600);
+  });
+
+  it("sets the last visit to the day of the sale", () => {
+    const book = clientBook([migrated()], [added()], [playInvoice()]);
+    expect(findClient(book, -1)?.lastVisit).toBe("2026-07-25");
+  });
+
+  it("sets the first visit too, when there was none", () => {
+    const book = clientBook([migrated()], [added()], [playInvoice()]);
+    expect(findClient(book, -1)?.firstVisit).toBe("2026-07-25");
+  });
+
+  it("names the stylist who did the work as their usual one", () => {
+    const book = clientBook([migrated()], [added()], [playInvoice()]);
+    expect(findClient(book, -1)?.prefStylistId).toBe(4);
+  });
+
+  it("works out the average visit", () => {
+    const book = clientBook([migrated()], [added()], [playInvoice()]);
+    expect(findClient(book, -1)?.avgTicket).toBe(600);
+  });
+
+  it("adds to a migrated client's existing history rather than replacing it", () => {
+    const book = clientBook([migrated()], [], [playInvoice({ clientId: 1, clientName: "Fatima Osman" })]);
+    const fatima = findClient(book, 1);
+    expect(fatima?.visitCount).toBe(42);
+    expect(fatima?.lifetimeSpend).toBe(33000);
+  });
+
+  it("leaves a migrated client's earlier last-visit date alone when the sale is older", () => {
+    const older = playInvoice({ clientId: 1, date: "2020-01-05T09:00:00" });
+    expect(findClient(clientBook([migrated()], [], [older]), 1)?.lastVisit).toBe("2026-07-25");
+  });
+
+  it("keeps their existing usual stylist rather than overwriting it", () => {
+    const book = clientBook([migrated()], [], [playInvoice({ clientId: 1 })]);
+    expect(findClient(book, 1)?.prefStylistId).toBe(3);
+  });
+
+  it("counts several sales", () => {
+    const book = clientBook([migrated()], [added()], [
+      playInvoice({ id: 1 }),
+      playInvoice({ id: 2, total: 400, date: "2026-07-26T11:00:00" }),
+    ]);
+    const c = findClient(book, -1);
+    expect(c?.visitCount).toBe(2);
+    expect(c?.lifetimeSpend).toBe(1000);
+    expect(c?.lastVisit).toBe("2026-07-26");
+    expect(c?.avgTicket).toBe(500);
+  });
+
+  it("ignores a walk-in sale with nobody attached", () => {
+    const book = clientBook([migrated()], [added()], [playInvoice({ clientId: null })]);
+    expect(findClient(book, -1)?.visitCount).toBe(0);
+  });
+
+  it("takes the stylist from the service line, not a voucher on the same sale", () => {
+    const withVoucher = playInvoice({
+      lines: [
+        { key: "v", descr: "Gift voucher", price: 500, qty: 1, disc: 0, stylistId: null, kind: "stock" },
+        { key: "s", descr: "Blow-dry", price: 250, qty: 1, disc: 0, stylistId: 6, kind: "service" },
+      ],
+    });
+    expect(findClient(clientBook([migrated()], [added()], [withVoucher]), -1)?.prefStylistId).toBe(6);
+  });
+
+  it("no longer reads as never visited", () => {
+    const book = clientBook([migrated()], [added()], [playInvoice()]);
+    expect(findClient(book, -1)?.lastVisit).not.toBeNull();
+  });
+
+  it("copes with no sales at all", () => {
+    expect(findClient(clientBook([migrated()], [added()], []), -1)?.visitCount).toBe(0);
   });
 });

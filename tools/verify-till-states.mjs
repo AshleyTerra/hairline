@@ -11,14 +11,22 @@ const PORT = 9226;
 const BASE = "http://localhost:3100";
 const OUT = "C:\\temp\\claude\\c--Data-OneDrive---Terra-Group-Applications-Hairline\\6305bd13-c82c-4c05-b471-9115eecd7529\\scratchpad\\states";
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 mkdirSync(OUT, { recursive: true });
+
+/*
+ * A fresh profile every run. Without this the browser kept the sales rung up by
+ * previous runs, so the day's takings drifted upwards and "the till is empty"
+ * quietly stopped meaning anything — the suite was measuring its own leftovers.
+ */
+const PROFILE = process.env.TEMP + "\\cdp-states";
+rmSync(PROFILE, { recursive: true, force: true });
 
 const chrome = spawn(CHROME, [
   "--headless=new", "--disable-gpu", "--hide-scrollbars",
   "--force-device-scale-factor=2",
   `--remote-debugging-port=${PORT}`,
-  "--user-data-dir=" + process.env.TEMP + "\\cdp-states",
+  "--user-data-dir=" + PROFILE,
   "--window-size=1280,860", "about:blank",
 ], { stdio: "ignore" });
 
@@ -66,13 +74,28 @@ await send("Runtime.enable");
 
 // sign in
 await send("Page.navigate", { url: BASE + "/" });
-await sleep(3500);
+/*
+ * Wait for the form rather than sleeping at it. A fixed 3.5s was enough only
+ * while the browser profile arrived already signed in; on a cold start the
+ * fields were not there yet, the sign-in silently did nothing, and every later
+ * check failed against the login screen.
+ */
+const until = async (expr, tries = 30) => {
+  for (let i = 0; i < tries; i += 1) {
+    if (await evaluate(expr)) return true;
+    await sleep(1000);
+  }
+  return false;
+};
+
+await until(`!!document.querySelector('input[autocomplete="username"]')`);
 await evaluate(`(() => {
   const s=(el,v)=>{const d=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;d.call(el,v);el.dispatchEvent(new Event('input',{bubbles:true}));};
   s(document.querySelector('input[autocomplete="username"]'),'reception');
   s(document.querySelector('input[type="password"]'),'hairline2026');
   document.querySelector('form').requestSubmit();
 })()`);
+await until(`!document.querySelector('input[autocomplete="username"]')`);
 await sleep(2200);
 
 const results = [];
@@ -81,7 +104,10 @@ const check = (label, pass, extra = "") => {
 };
 
 await send("Page.navigate", { url: BASE + "/till" });
-await sleep(2600);
+/* The shell holds every page back until it has hydrated, so wait for the rail
+   rather than guessing at how long that takes on the day. */
+await until(`!!document.querySelector('aside')`);
+await sleep(1200);
 
 // STATE 1: empty till, no client
 let text = await evaluate(`document.body.innerText.replace(/\\s+/g,' ')`);
@@ -202,7 +228,8 @@ for (const [path, needle] of [["/", "Pick a service or product to start"],
                               ["/pricing", "Price menu"],
                               ["/admin", "Settings and data"]]) {
   await send("Page.navigate", { url: BASE + path });
-  await sleep(1800);
+  await until(`!!document.querySelector('aside')`);
+  await sleep(900);
   const ok = await evaluate(`document.body.innerText.includes(${JSON.stringify(needle)})`);
   const w = await evaluate(`document.querySelector('aside')?.getBoundingClientRect().width ?? 0`);
   check(`screen ${path}`, ok && Math.round(w) === 78, `rail ${Math.round(w)}px`);

@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { notFound } from "next/navigation";
 import { Badge, Card, CardTitle, PageHeader } from "@/components/ui";
 import { StatTile } from "@/components/charts";
-import { getClient, getStaff, loadVisits, meta } from "@/lib/data";
-import { asClient } from "@/lib/clientBook";
+import { clients, getStaff, loadVisits, meta } from "@/lib/data";
+import { clientBook, findClient } from "@/lib/clientBook";
+import { PurchaseHistory } from "@/components/clients/PurchaseHistory";
 import { longDate, phone, relativeToDemo, shortDate, zar, zar0 } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Visit } from "@/lib/types";
@@ -15,10 +16,13 @@ export default function ClientPage({ params }: { params: Promise<{ id: string }>
   const { id } = use(params);
 
   /* Captures carry a negative id and are not in the migrated file, so look
-     there too — otherwise a client added at the till has no file to open. */
-  const { newClients } = useStore();
-  const captured = newClients.find((c) => c.id === Number(id));
-  const client = getClient(Number(id)) ?? (captured ? asClient(captured) : undefined);
+     there too — otherwise a client added at the till has no file to open. Sales
+     rung up here are folded in, so a visit paid for this morning shows now. */
+  const { newClients, invoices } = useStore();
+  const client = useMemo(
+    () => findClient(clientBook(clients, newClients, invoices), Number(id)),
+    [id, newClients, invoices]
+  );
 
   /* A client captured today has no history to fetch, so start them at "none"
      rather than at "still loading" — nothing will ever arrive. */
@@ -98,6 +102,14 @@ export default function ClientPage({ params }: { params: Promise<{ id: string }>
           value={relativeToDemo(client.lastVisit, meta.demoDate)}
           hint={client.lastVisit ? shortDate(client.lastVisit) : undefined}
           tone={client.lapsed ? "warn" : "neutral"}
+        />
+      </div>
+
+      <div className="mb-4">
+        <PurchaseHistory
+          clientId={client.id}
+          clientName={client.name}
+          visits={visits}
         />
       </div>
 

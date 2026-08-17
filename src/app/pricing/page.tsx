@@ -4,43 +4,69 @@ import { useMemo, useState } from "react";
 import { Card, CardTitle, PageHeader, TableScroll } from "@/components/ui";
 import { MenuBuilder } from "@/components/pricing/MenuBuilder";
 import { ScheduleIncrease } from "@/components/pricing/ScheduleIncrease";
-import { products, serviceDepts, services, tillVendors } from "@/lib/data";
+import { products, serviceDepts, services } from "@/lib/data";
+import { ServiceCostSheet } from "@/components/pricing/ServiceCostSheet";
+import { stockBook } from "@/lib/stockBook";
+import { useStore } from "@/lib/store";
 import { zar } from "@/lib/format";
 
-type Tab = "services" | "retail" | "menu";
+type Tab = "services" | "retail" | "menu" | "costs";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "services", label: "Service pricing" },
   { key: "retail", label: "Retail pricing" },
   { key: "menu", label: "Client menu" },
+  { key: "costs", label: "Service cost list" },
 ];
 
 export default function PriceMenuPage() {
   const [tab, setTab] = useState<Tab>("services");
   const [dept, setDept] = useState<string>(serviceDepts[0] ?? "");
-  const [vendor, setVendor] = useState<string>(tillVendors[0] ?? "");
+  const [vendor, setVendor] = useState<string>("");
   const [increase, setIncrease] = useState<null | "services" | "retail">(null);
+
+  /* Retail as the salon maintains it, so a price corrected on the Stock screen
+     is the price this menu quotes — the two must never disagree. */
+  const { newStock, stockEdits, archivedStock } = useStore();
+  const retail = useMemo(
+    () => stockBook(products.retail, newStock, stockEdits, archivedStock, "retail"),
+    [newStock, stockEdits, archivedStock]
+  );
+  const vendors = useMemo(() => {
+    const seen: string[] = [];
+    for (const p of retail) if (!seen.includes(p.brand)) seen.push(p.brand);
+    return seen.sort((a, b) => a.localeCompare(b));
+  }, [retail]);
+  const activeVendor = vendor || vendors[0] || "";
 
   const deptServices = useMemo(() => services.filter((s) => s.dept === dept), [dept]);
   const vendorProducts = useMemo(
-    () => products.retail.filter((p) => p.brand === vendor),
-    [vendor]
+    () => retail.filter((p) => p.brand === activeVendor),
+    [retail, activeVendor]
   );
 
   return (
     <>
       <PageHeader
         eyebrow="Price menu"
-        title={tab === "menu" ? "The client menu" : "What everything costs"}
+        title={
+          tab === "menu"
+            ? "The client menu"
+            : tab === "costs"
+              ? "What each service costs us"
+              : "What everything costs"
+        }
         subtitle={
           tab === "services"
             ? "Service prices by department, with the margin on each."
             : tab === "retail"
               ? "Retail prices by supplier, with cost, margin and stock on hand."
-              : "Generated from the prices above — never retyped."
+              : tab === "costs"
+                ? "Every service at cost price, on one printable sheet. Internal — not for the counter."
+                : "Generated from the prices above — never retyped."
         }
         actions={
-          tab !== "menu" ? (
+          tab === "services" || tab === "retail" ? (
             <button
               type="button"
               onClick={() => setIncrease(tab === "services" ? "services" : "retail")}
@@ -135,14 +161,14 @@ export default function PriceMenuPage() {
       {tab === "retail" && (
         <>
           <div className="no-print mb-3 flex flex-wrap gap-1.5">
-            {tillVendors.map((v) => (
+            {vendors.map((v) => (
               <button
                 key={v}
                 type="button"
                 onClick={() => setVendor(v)}
-                aria-pressed={vendor === v}
+                aria-pressed={activeVendor === v}
                 className={`whitespace-nowrap rounded-full border px-3 py-[5px] text-xs font-semibold transition-colors ${
-                  vendor === v
+                  activeVendor === v
                     ? "border-ink bg-ink text-white"
                     : "border-hairline bg-card text-taupe-deep hover:border-taupe"
                 }`}
@@ -156,7 +182,7 @@ export default function PriceMenuPage() {
             <CardTitle
               right={<span className="text-xs text-mutedink">{vendorProducts.length} products</span>}
             >
-              {vendor}
+              {activeVendor}
             </CardTitle>
             <TableScroll>
               <table className="w-full text-sm">
@@ -202,6 +228,10 @@ export default function PriceMenuPage() {
 
       {/* ------------------------------------------------------ client menu */}
       {tab === "menu" && <MenuBuilder />}
+
+      {/* Cost prices, printable — an internal sheet, kept apart from the
+          client menu so the two are never picked up for one another. */}
+      {tab === "costs" && <ServiceCostSheet />}
 
       {increase && (
         <ScheduleIncrease

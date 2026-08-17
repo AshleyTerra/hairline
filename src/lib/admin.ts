@@ -231,6 +231,11 @@ export const ABILITIES: readonly AbilityDef[] = [
     label: "Add and edit stock",
     description: "Change a brand, barcode, cost or price from the Stock screen",
   },
+  {
+    key: "amendInvoice",
+    label: "Amend a closed docket",
+    description: "Correct a stylist split or a payment type after the sale, with a password",
+  },
 ];
 
 export type Abilities = Record<Role, string[]>;
@@ -242,6 +247,13 @@ export type Abilities = Record<Role, string[]>;
  */
 export const DEFAULT_ABILITIES: Abilities = {
   owner: ABILITIES.map((a) => a.key),
+  /*
+   * Amending a closed docket is not on this list. Everything else here happens
+   * while the client is still at the desk; an amendment rewrites a sale that is
+   * already in the day's takings and in somebody's wage figure, so it starts
+   * with the owner. Tick it on for reception in Admin if that is the salon's
+   * preference — the password is asked for either way.
+   */
   reception: ["costPrice", "priceOverride", "stockMaintenance"],
   stylist: [],
 };

@@ -15,6 +15,8 @@ interface DayBookProps {
   onOpenDocket: (number: number) => void;
   /** Starts a docket; a date means it is being prepared for a future day. */
   onNewDocket: (forDate?: string) => void;
+  /** Offered per row when the signed-in user may correct a closed docket. */
+  onAmend?: (invoiceId: number) => void;
 }
 
 /** Monday-to-Sunday week containing a date. */
@@ -60,7 +62,13 @@ const asLines = (entry: DayBookEntry, dict: string[]): TillLine[] =>
  * A date or range can be chosen, and filtered by client or stylist; any row
  * opens its docket.
  */
-export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: DayBookProps) {
+export function DayBook({
+  dockets,
+  activeNumber,
+  onOpenDocket,
+  onNewDocket,
+  onAmend,
+}: DayBookProps) {
   const { invoices } = useStore();
   const [from, setFrom] = useState(meta.demoDate);
   const [to, setTo] = useState(meta.demoDate);
@@ -145,6 +153,10 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
           i: inv.lines.length,
           lines: inv.lines,
           payments: inv.payments,
+          /* Only a sale rung up here can be corrected; the migrated day book is
+             a record of what happened, not a working document. */
+          amendable: inv.id,
+          amended: (inv.amendments?.length ?? 0) > 0,
         }))
       );
     }
@@ -437,8 +449,25 @@ export function DayBook({ dockets, activeNumber, onOpenDocket, onNewDocket }: Da
                   </span>
                   <span className="tnum w-16 shrink-0 text-right text-[11px] text-faintink">
                     #{r.n}
+                    {"amended" in r && Boolean(r.amended) && (
+                      <span className="block text-[10px] text-warn">amended</span>
+                    )}
                   </span>
                 </button>
+
+                {/* Correcting a closed docket: only a sale rung up here, only
+                    for whoever is allowed it, and only behind a password. */}
+                {onAmend && "amendable" in r && (
+                  <div className="flex justify-end px-4 pb-2">
+                    <button
+                      type="button"
+                      onClick={() => onAmend(r.amendable as number)}
+                      className="text-[11px] font-semibold text-taupe transition-colors hover:text-taupe-deep"
+                    >
+                      Amend #{r.n}
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

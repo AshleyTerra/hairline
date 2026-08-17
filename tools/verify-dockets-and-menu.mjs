@@ -55,15 +55,29 @@ const check = (l, p, x = "") => checks.push(`${p ? "PASS" : "FAIL"}  ${l}${x ? "
 
 await send("Page.enable");
 await send("Runtime.enable");
+/* Wait for what is being waited for, rather than a fixed guess: on a cold
+   start the sign-in fields were not there yet and the whole run then measured
+   the login screen. */
+const until = async (expr, tries = 30) => {
+  for (let i = 0; i < tries; i += 1) {
+    if (await ev(expr)) return true;
+    await sleep(1000);
+  }
+  return false;
+};
+
 await send("Page.navigate", { url: BASE + "/" });
-await sleep(3300);
+await until(`!!document.querySelector('input[autocomplete="username"]')`);
 await ev(`(() => {
   const s=(el,v)=>{const d=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;d.call(el,v);el.dispatchEvent(new Event('input',{bubbles:true}));};
   s(document.querySelector('input[autocomplete="username"]'),'reception');
   s(document.querySelector('input[type="password"]'),'hairline2026');
   document.querySelector('form').requestSubmit();
 })()`);
-await sleep(2600);
+await until(`!document.querySelector('input[autocomplete="username"]')`);
+/* And for the shell itself, which holds every page back until it hydrates. */
+await until(`!!document.querySelector('button[aria-pressed]')`);
+await sleep(1200);
 
 // --- Dockets -------------------------------------------------------------
 /** The till opens on Clients today, which is where dockets are started. */

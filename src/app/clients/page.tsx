@@ -29,8 +29,10 @@ function ClientsList() {
   const demoMonth = Number(meta.demoDate.slice(5, 7));
 
   /* One directory: the migrated file plus anyone captured at the counter. */
-  const { newClients } = useStore();
-  const book = useMemo(() => clientBook(clients, newClients), [newClients]);
+  const { newClients, invoices } = useStore();
+  /* Sales rung up here count towards the client's own record, so a visit
+     shows on their file the moment it is paid for. */
+  const book = useMemo(() => clientBook(clients, newClients, invoices), [newClients, invoices]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();

@@ -94,7 +94,10 @@ try {
     document.querySelector('form').requestSubmit();
   })()`);
   await until(`!document.querySelector('input[autocomplete="username"]')`);
-  await sleep(2200);
+  /* The shell holds the page back until it has hydrated, so wait for it rather
+     than for a fixed two seconds — clicking early does nothing at all. */
+  await until(`!!document.querySelector('button[aria-pressed]')`);
+  await sleep(1200);
   await shot("s0-till");
 
   // ---------------------------------------------------------------- open it

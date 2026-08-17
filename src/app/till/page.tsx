@@ -14,7 +14,9 @@ import { RedeemVoucherDialog } from "@/components/till/RedeemVoucherDialog";
 import { closeDocket, findDocket, nextNumber, openDocket, saveDocket } from "@/lib/dockets";
 import { PaymentPanel } from "@/components/till/PaymentPanel";
 import { GlobalSearch } from "@/components/till/GlobalSearch";
-import { demoday, getClient, getStaff, meta, products, staff } from "@/lib/data";
+import { demoday, getClient, getStaff, loadVisits, meta, products, staff } from "@/lib/data";
+import { PurchaseHistory } from "@/components/clients/PurchaseHistory";
+import { AmendDocketDialog } from "@/components/till/AmendDocketDialog";
 import { initials, longDate, zar, zar0 } from "@/lib/format";
 import { demoNow, demoToday } from "@/lib/clock";
 import { creditable, roster } from "@/lib/roster";
@@ -40,7 +42,15 @@ import {
   type Voucher,
   type VoucherDraft,
 } from "@/lib/vouchers";
-import type { Client, Payment, PaymentMethod, Product, Service, TillLine } from "@/lib/types";
+import type {
+  Client,
+  Payment,
+  PaymentMethod,
+  Product,
+  Service,
+  TillLine,
+  Visit,
+} from "@/lib/types";
 
 let lineCounter = 0;
 const nextKey = () => `line-${(lineCounter += 1)}`;
@@ -71,6 +81,8 @@ function TillCounter() {
     role,
     user,
     abilities,
+    updateInvoice,
+    confirmPassword,
     newStock,
     stockEdits,
     archivedStock,
@@ -81,6 +93,7 @@ function TillCounter() {
      till, so it is an ability rather than a screen permission. */
   const mayCostPrice = canDo(abilities, role, "costPrice");
   const mayOverride = canDo(abilities, role, "priceOverride");
+  const mayAmend = canDo(abilities, role, "amendInvoice");
   /** Whoever the override is recorded against. */
   const overrideBy = user?.displayName ?? user?.username ?? role;
 
@@ -112,6 +125,11 @@ function TillCounter() {
   const [sellingVoucher, setSellingVoucher] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
   const [voucherError, setVoucherError] = useState<string | null>(null);
+  /** What this client has bought before, opened from the docket header. */
+  const [showingHistory, setShowingHistory] = useState(false);
+  /** Which closed invoice is being corrected, if any. */
+  const [amending, setAmending] = useState<number | null>(null);
+  const [pastVisits, setPastVisits] = useState<Visit[] | null>(null);
 
   const totals = useMemo(() => computeTotals(till), [till]);
   const seconds = elapsedSeconds(till, now);
@@ -142,6 +160,20 @@ function TillCounter() {
     // `dockets` is deliberately omitted: including it would loop on its own write.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [till, docketNo]);
+
+  /* Their history is fetched only when reception asks for it — it is a separate
+     file per client, and the till should not pay for one nobody opened. */
+  useEffect(() => {
+    if (!showingHistory || till.clientId == null) return;
+    if (till.clientId < 0) return;
+    let active = true;
+    loadVisits(till.clientId).then((v) => {
+      if (active) setPastVisits(v);
+    });
+    return () => {
+      active = false;
+    };
+  }, [showingHistory, till.clientId]);
 
   /* The address bar is tidied once the docket is on the counter. */
   useEffect(() => {
@@ -544,6 +576,7 @@ function TillCounter() {
                 activeNumber={docketNo}
                 onOpenDocket={openExisting}
                 onNewDocket={newDocket}
+                onAmend={mayAmend ? setAmending : undefined}
               />
             }
           />
@@ -569,6 +602,7 @@ function TillCounter() {
             onChange={() => window.dispatchEvent(new Event("hairline:focus-search"))}
             onAddClient={() => setAddingClient(true)}
             onClear={hasLines || docketNo != null ? clearSale : undefined}
+            onHistory={() => setShowingHistory(true)}
           />
 
           {/* Lines — a floor height so a tall keypad can never squeeze them away */}
@@ -957,6 +991,51 @@ function TillCounter() {
           }}
         />
       )}
+
+      {showingHistory && till.clientId != null && (
+        <div
+          className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-ink/40 px-4 py-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`What ${till.clientName ?? "this client"} has bought before`}
+          onClick={() => setShowingHistory(false)}
+        >
+          <div className="w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+            <PurchaseHistory
+              clientId={till.clientId}
+              clientName={till.clientName ?? "This client"}
+              visits={till.clientId < 0 ? [] : pastVisits}
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowingHistory(false)}
+                className="rounded bg-card px-4 py-2 text-sm font-semibold text-ink"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {amending != null && (() => {
+        const invoice = invoices.find((i) => i.id === amending);
+        if (!invoice) return null;
+        return (
+          <AmendDocketDialog
+            invoice={invoice}
+            stylists={staffForPicker.map((m) => ({ id: m.id, name: m.name }))}
+            by={overrideBy}
+            onConfirmPassword={confirmPassword}
+            onClose={() => setAmending(null)}
+            onSave={(corrected) => {
+              updateInvoice(corrected);
+              setAmending(null);
+            }}
+          />
+        );
+      })()}
 
       {slip && <InvoiceSlip data={slip} onClose={() => setSlip(null)} />}
     </div>

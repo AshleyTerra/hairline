@@ -36,8 +36,8 @@ export function GlobalSearch({
 
   /* Searches the migrated file and anyone captured at the counter today, so a
      client added mid-sale can be found again a minute later. */
-  const { newClients } = useStore();
-  const book = useMemo(() => clientBook(clients, newClients), [newClients]);
+  const { newClients, invoices } = useStore();
+  const book = useMemo(() => clientBook(clients, newClients, invoices), [newClients, invoices]);
 
   const matches = useMemo(() => {
     if (!q) return { clients: [], services: [], products: [] };

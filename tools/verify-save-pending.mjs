@@ -80,6 +80,10 @@ await sleep(2400);
 
 // Build a sale with no docket open, straight off the service list. The till
 // opens on Clients today, so the list is a tab away.
+/* Wait for the shell first. Clicking the tab while the app is still hydrating
+   did nothing, the catalogue never opened, and every later check then failed
+   against an empty till rather than against the thing being tested. */
+await until(`!!document.querySelector('button[aria-pressed]')`);
 await clickTab("services");
 await until(`!!document.querySelector('[data-catalogue] li button')`);
 await sleep(800);

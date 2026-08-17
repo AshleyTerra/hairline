@@ -235,6 +235,25 @@ class DemoStore {
     this.set({ invoices: [] });
   }
 
+  /** Writes a corrected invoice back over the original. */
+  updateInvoice(invoice: PlayInvoice) {
+    const invoices = this.getSnapshot().invoices.map((i) => (i.id === invoice.id ? invoice : i));
+    write(INVOICE_KEY, invoices);
+    this.set({ invoices });
+  }
+
+  /**
+   * Checks the signed-in user's own password. Used to gate amending a closed
+   * docket: it is the password the salon already knows, so there is no second
+   * secret to forget, and the amendment is recorded against that person.
+   */
+  confirmPassword(password: string): boolean {
+    const { user, users } = this.getSnapshot();
+    if (!user) return false;
+    const account = users.find((u) => u.username === user.username);
+    return !!account && account.password === password && password.length > 0;
+  }
+
   setDockets(dockets: Docket[]) {
     write(DOCKETS_KEY, dockets);
     this.set({ dockets });
@@ -429,6 +448,8 @@ export function useStore() {
     []
   );
   const clearInvoices = useCallback(() => store.clearInvoices(), []);
+  const updateInvoice = useCallback((i: PlayInvoice) => store.updateInvoice(i), []);
+  const confirmPassword = useCallback((p: string) => store.confirmPassword(p), []);
   const signIn = useCallback(
     (username: string, password: string) => store.signIn(username, password),
     []
@@ -489,6 +510,8 @@ export function useStore() {
       setStylistId,
       addInvoice,
       clearInvoices,
+      updateInvoice,
+      confirmPassword,
       setUsers,
       setPermissions,
       setAbilities,
@@ -509,7 +532,7 @@ export function useStore() {
       clearNewStock,
       setStockEdits,
     }),
-    [state, signIn, signOut, setRole, setStylistId, addInvoice, clearInvoices, setUsers,
+    [state, signIn, signOut, setRole, setStylistId, addInvoice, clearInvoices, updateInvoice, confirmPassword, setUsers,
      setPermissions, setAbilities, addImportedClients, clearImportedClients, resetDemo, setDockets, addClient, addAppointment, cancelAppointment, updateAppointment, addVouchers, saveVoucher, setStaffRecords, setDesignations, setArchivedStock, addStock, clearNewStock, setStockEdits]
   );
 }

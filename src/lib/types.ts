@@ -341,6 +341,13 @@ export interface NewClient {
   walkIn: boolean;
 }
 
+/** One correction made to a docket after it was closed. */
+export interface InvoiceAmendment {
+  by: string;
+  at: string;
+  what: string;
+}
+
 /** A completed sale rung up in the prototype. */
 export interface PlayInvoice {
   id: number;
@@ -352,4 +359,9 @@ export interface PlayInvoice {
   payments: Payment[];
   tips: Tip[];
   seconds: number;
+  /**
+   * Corrections made after the docket was closed — a stylist split that was
+   * missed, or a payment type chosen in haste. Absent on a sale nobody touched.
+   */
+  amendments?: InvoiceAmendment[];
 }

@@ -171,6 +171,27 @@ body {
    * on, so 228 services land on one sheet printed both sides, as the salon's
    * own menu does.
    */
+  /*
+   * The internal cost sheet. Two columns rather than the menu's three: it is read
+   * at a desk, not held up at the counter, so legibility beats compactness.
+   */
+  .cost-columns {
+    columns: 2;
+    column-gap: 10mm;
+    column-fill: auto;
+    orphans: 3;
+    widows: 3;
+    font-size: 9pt;
+    line-height: 1.25;
+  }
+  .cost-columns h3 {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+  .cost-columns li {
+    break-inside: avoid;
+  }
+
   .menu-sheet {
     font-size: 8pt;
     line-height: 1.2;

@@ -7,7 +7,9 @@
  * till's own search. Everything that looks a client up now goes through here, so
  * there is one directory and no way for a capture to fall out of it.
  */
-import type { Client, NewClient } from "./types";
+import type { Client, NewClient, PlayInvoice } from "./types";
+
+const round = (v: number) => Math.round(v * 100) / 100;
 
 export type ClientKind = "service" | "walkin";
 
@@ -153,16 +155,80 @@ export function asClient(added: NewClient): Client {
   };
 }
 
+/** What the sales rung up here add to one client's record. */
+interface Activity {
+  visits: number;
+  spend: number;
+  first: string;
+  last: string;
+  /** The stylist on the sale's first service line. */
+  stylistId: number | null;
+}
+
+/** Sales grouped by client. A walk-in with nobody attached is ignored. */
+function activityByClient(sales: readonly PlayInvoice[]): Map<number, Activity> {
+  const byClient = new Map<number, Activity>();
+
+  for (const sale of sales) {
+    if (sale.clientId == null) continue;
+    const day = sale.date.slice(0, 10);
+    /* The stylist who did the work — not a voucher on the same docket, which
+       belongs to the salon and has nobody behind it. */
+    const worked = sale.lines.find((l) => l.kind !== "stock" && l.stylistId != null);
+    const current = byClient.get(sale.clientId);
+
+    byClient.set(sale.clientId, {
+      visits: (current?.visits ?? 0) + 1,
+      spend: round((current?.spend ?? 0) + sale.total),
+      first: current && current.first < day ? current.first : day,
+      last: current && current.last > day ? current.last : day,
+      stylistId: current?.stylistId ?? worked?.stylistId ?? null,
+    });
+  }
+
+  return byClient;
+}
+
+/**
+ * Adds what the salon has rung up to a client's own record.
+ *
+ * Without this a client captured at the counter stayed at "never visited, 0
+ * visits, R0" however many times they were served — the sale existed, but not on
+ * their file. A migrated client's history is added to rather than replaced, and
+ * a date or a usual stylist already on file is left alone.
+ */
+function withActivity(client: Client, activity: Activity | undefined): Client {
+  if (!activity) return client;
+  const visitCount = client.visitCount + activity.visits;
+  const lifetimeSpend = round(client.lifetimeSpend + activity.spend);
+  return {
+    ...client,
+    visitCount,
+    lifetimeSpend,
+    avgTicket: visitCount > 0 ? round(lifetimeSpend / visitCount) : 0,
+    firstVisit:
+      client.firstVisit && client.firstVisit < activity.first ? client.firstVisit : activity.first,
+    lastVisit:
+      client.lastVisit && client.lastVisit > activity.last ? client.lastVisit : activity.last,
+    prefStylistId: client.prefStylistId ?? activity.stylistId,
+    /* They have just been in, so they are plainly not lapsed. */
+    lapsed: false,
+  };
+}
+
 /**
  * Everyone, newest capture first — reception has just typed that name in, so it
- * is the one they are about to look for.
+ * is the one they are about to look for. Sales rung up here are folded into each
+ * record, so a visit shows on the client's file the moment it is paid for.
  */
 export function clientBook(
   migrated: readonly Client[],
-  addedToday: readonly NewClient[]
+  addedToday: readonly NewClient[],
+  sales: readonly PlayInvoice[] = []
 ): Client[] {
+  const activity = activityByClient(sales);
   const captured = [...addedToday].reverse().map(asClient);
-  return [...captured, ...migrated];
+  return [...captured, ...migrated].map((c) => withActivity(c, activity.get(c.id)));
 }
 
 export const findClient = (book: readonly Client[], id: number): Client | undefined =>
